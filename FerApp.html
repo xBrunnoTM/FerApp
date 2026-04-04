@@ -210,6 +210,10 @@
       font-size: 12px; font-weight: 700;
       backdrop-filter: blur(4px);
     }
+    .zoom-btn.pan-active {
+      background: rgba(245,158,11,0.75);
+      border-color: rgba(245,158,11,0.9);
+    }
     .modal-controls {
       background: var(--gray-900); padding: 16px 20px 24px;
       border-radius: var(--radius) var(--radius) 0 0;
@@ -309,8 +313,11 @@
     .badge-group   { background: var(--blue-100); color: var(--blue-600); }
     .badge-dia     { background: var(--amber-100); color: #92400E; }
     .badge-area    { background: var(--green-100); color: var(--green-700); }
-    .record-sync   { font-size: 18px; color: var(--gray-300); flex-shrink: 0; }
-    .record-sync.synced { color: var(--green-600); }
+    .record-sync         { font-size: 18px; color: var(--gray-300); flex-shrink: 0; line-height:1; }
+    .record-sync.synced  { color: var(--green-600); }
+    .record-sync.failed  { color: var(--red-500); }
+    .record-sync.syncing { color: var(--amber-500); animation: syncpulse 1s ease-in-out infinite; }
+    @keyframes syncpulse { 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
 
     /* ── Filters ── */
     .filter-bar {
@@ -345,6 +352,65 @@
       font-size: 15px; outline: none;
     }
     .tag-add-row input:focus { border-color: var(--green-600); }
+
+    /* ── Record Detail Sheet ── */
+    #recordSheet {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.55);
+      display: none; align-items: flex-end; justify-content: center;
+    }
+    #recordSheet.open { display: flex; }
+    .rsheet-body {
+      background: var(--white); border-radius: 20px 20px 0 0;
+      width: 100%; max-width: 480px; padding: 0 0 32px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .rsheet-handle {
+      width: 40px; height: 4px; background: var(--gray-300);
+      border-radius: 2px; margin: 12px auto 16px;
+    }
+    .rsheet-photo {
+      width: 100%; max-height: 220px; object-fit: cover;
+      background: var(--gray-100); display: block;
+    }
+    .rsheet-photo-empty {
+      width: 100%; height: 120px; background: var(--gray-100);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px; color: var(--gray-300);
+    }
+    .rsheet-info { padding: 16px 20px 0; }
+    .rsheet-title { font-size: 18px; font-weight: 800; color: var(--gray-900); }
+    .rsheet-sub   { font-size: 13px; color: var(--gray-500); margin-top: 3px; }
+    .rsheet-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .rsheet-row {
+      display: flex; gap: 8px; align-items: flex-start;
+      padding: 6px 20px; font-size: 13px;
+    }
+    .rsheet-row .lbl { color: var(--gray-500); min-width: 110px; flex-shrink: 0; }
+    .rsheet-row .val { color: var(--gray-900); font-weight: 500; word-break: break-all; }
+    .rsheet-divider { border: none; border-top: 1px solid var(--gray-100); margin: 10px 0; }
+    /* Status de sincronização */
+    .rsheet-sync {
+      margin: 12px 20px; padding: 12px 14px; border-radius: var(--radius-sm);
+      display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600;
+    }
+    .rsheet-sync.ok   { background: var(--green-100); color: var(--green-700); }
+    .rsheet-sync.fail { background: var(--amber-100); color: #92400E; }
+    .rsheet-sync .sync-icon { font-size: 22px; }
+    .rsheet-sync .sync-msg  { flex: 1; }
+    /* Botões */
+    .rsheet-actions { display: flex; gap: 10px; padding: 14px 20px 0; }
+    .btn-resync {
+      flex: 2; padding: 13px; border: none; border-radius: var(--radius-sm);
+      background: var(--green-700); color: var(--white);
+      font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+    .btn-resync:disabled { opacity: .55; }
+    .btn-del-record {
+      flex: 1; padding: 13px; border: 1.5px solid var(--red-500);
+      border-radius: var(--radius-sm); background: transparent;
+      color: var(--red-500); font-size: 15px; font-weight: 700; cursor: pointer;
+    }
 
     /* ── Sync / Toast ── */
     #syncBanner {
@@ -654,8 +720,9 @@
     <div id="canvasZoomWrap">
       <canvas id="analysisCanvas"></canvas>
     </div>
-    <!-- Zoom controls (overlay, bottom-right) -->
+    <!-- Zoom controls (overlay, top-right) -->
     <div class="zoom-bar">
+      <button class="zoom-btn" id="btnPanMode" onclick="togglePanMode()" title="Alternar Mover/Desenhar">✏️</button>
       <button class="zoom-btn" onclick="adjustZoom(-0.5)" title="Diminuir zoom">−</button>
       <span class="zoom-label" id="zoomLabel">1×</span>
       <button class="zoom-btn" onclick="adjustZoom(+0.5)" title="Aumentar zoom">+</button>
@@ -724,6 +791,37 @@
     </div>
 
     <button class="btn btn-confirm" onclick="confirmAnalysis()">✔ Usar Este Resultado</button>
+  </div>
+</div>
+
+<!-- ══ RECORD DETAIL SHEET ══ -->
+<div id="recordSheet" onclick="closeRecordSheet(event)">
+  <div class="rsheet-body">
+    <div class="rsheet-handle"></div>
+
+    <!-- Foto -->
+    <div id="rsheetPhoto"></div>
+
+    <!-- Info principal -->
+    <div class="rsheet-info">
+      <div class="rsheet-title" id="rsheetTitle"></div>
+      <div class="rsheet-sub"   id="rsheetSub"></div>
+      <div class="rsheet-badges" id="rsheetBadges"></div>
+    </div>
+
+    <hr class="rsheet-divider" style="margin-top:14px">
+
+    <!-- Detalhes -->
+    <div id="rsheetRows"></div>
+
+    <!-- Status de sincronização -->
+    <div id="rsheetSync" class="rsheet-sync"></div>
+
+    <!-- Ações -->
+    <div class="rsheet-actions">
+      <button class="btn-resync"     id="btnResync"     onclick="resyncCurrentRecord()">🔄 Reenviar para o Drive</button>
+      <button class="btn-del-record" id="btnDelRecord"  onclick="deleteCurrentRecord()">🗑 Apagar</button>
+    </div>
   </div>
 </div>
 
@@ -946,8 +1044,7 @@ function photoAreaClick(e) {
 // ═══════════════════════════════════════════════
 function openZoom() {
   if (!state.currentPhoto) return;
-  document.getElementById('zoomImg').src = state.currentPhoto;
-  document.getElementById('zoomOverlay').classList.add('open');
+  openZoomSrc(state.currentPhoto);
 }
 function closeZoom() {
   document.getElementById('zoomOverlay').classList.remove('open');
@@ -1074,9 +1171,33 @@ let pinchStartDist= null;    // distância inicial do gesto pinch
 let pinchStartZoom= 1.0;     // zoom no início do pinch
 
 // ── Zoom do canvas ────────────────────────────────
+let panMode = false;
+
+function togglePanMode() {
+  panMode = !panMode;
+  const canvas = document.getElementById('analysisCanvas');
+  const btn    = document.getElementById('btnPanMode');
+  if (panMode) {
+    canvas.style.touchAction = 'pan-x pan-y'; // dedo arrasta o scroll
+    btn.textContent = '✋';
+    btn.classList.add('pan-active');
+    btn.title = 'Modo Mover — toque para voltar ao desenho';
+  } else {
+    canvas.style.touchAction = 'none';         // dedo desenha
+    btn.textContent = '✏️';
+    btn.classList.remove('pan-active');
+    btn.title = 'Alternar Mover/Desenhar';
+  }
+}
+
 function adjustZoom(delta, reset) {
-  if (reset) { canvasZoom = 1.0; }
-  else        { canvasZoom = Math.max(1, Math.min(4, canvasZoom + delta)); }
+  if (reset) {
+    canvasZoom = 1.0;
+    // Reset pan mode ao voltar para 1:1
+    if (panMode) togglePanMode();
+  } else {
+    canvasZoom = Math.max(1, Math.min(4, canvasZoom + delta));
+  }
   applyCanvasZoom();
 }
 
@@ -1104,8 +1225,13 @@ function openAnalysisModal() {
   window._traceResult     = null;
   refPoints = []; woundPoints = []; tracePoints = [];
 
-  // Resetar zoom ao abrir
+  // Resetar zoom e modo pan ao abrir
   canvasZoom = 1.0;
+  panMode    = false;
+  const pBtn = document.getElementById('btnPanMode');
+  if (pBtn) { pBtn.textContent = '✏️'; pBtn.classList.remove('pan-active'); }
+  const cv = document.getElementById('analysisCanvas');
+  if (cv) cv.style.touchAction = 'none';
 
   const img = new Image();
   img.onload = function() {
@@ -1275,6 +1401,8 @@ function initDrawingListeners() {
   }
 
   canvas.addEventListener('touchstart', e => {
+    // Pan mode com 1 dedo: deixa o browser rolar livremente
+    if (panMode && e.touches.length === 1) return;
     e.preventDefault();
     if (e.touches.length === 2) {
       // Pinch — início
@@ -1289,28 +1417,51 @@ function initDrawingListeners() {
   }, { passive:false });
 
   canvas.addEventListener('touchmove', e => {
+    // Pan mode com 1 dedo: deixa o browser rolar livremente
+    if (panMode && e.touches.length === 1) return;
     e.preventDefault();
     if (e.touches.length === 2 && pinchStartDist) {
-      // Pinch — movimento
+      // Pinch — movimento com zoom focal (amplia no ponto dos dedos)
       const dx = e.touches[0].clientX - e.touches[1].clientX;
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.hypot(dx, dy);
-      canvasZoom = Math.max(1, Math.min(4, pinchStartZoom * (dist / pinchStartDist)));
+      const newZoom = Math.max(1, Math.min(4, pinchStartZoom * (dist / pinchStartDist)));
+
+      // Ponto médio entre os dois dedos (em coordenadas de tela)
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const scrollWrap = document.getElementById('canvasWrap');
+      const rect = scrollWrap.getBoundingClientRect();
+
+      // Posição do ponto focal no conteúdo atual (antes do zoom)
+      const focalX = midX - rect.left + scrollWrap.scrollLeft;
+      const focalY = midY - rect.top  + scrollWrap.scrollTop;
+      const oldW = canvas.width  * canvasZoom;
+      const oldH = canvas.height * canvasZoom;
+
+      canvasZoom = newZoom;
       applyCanvasZoom();
+
+      // Reajusta scroll para manter o ponto focal sob os dedos
+      const newW = canvas.width  * canvasZoom;
+      const newH = canvas.height * canvasZoom;
+      scrollWrap.scrollLeft = (focalX / oldW) * newW - (midX - rect.left);
+      scrollWrap.scrollTop  = (focalY / oldH) * newH - (midY - rect.top);
       return;
     }
     if (e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive:false });
 
   canvas.addEventListener('touchend', e => {
+    if (panMode && e.touches.length === 0 && !pinchStartDist) return;
     e.preventDefault();
     if (e.touches.length < 2) pinchStartDist = null;
     if (e.touches.length === 0) onEnd();
   }, { passive:false });
 
-  canvas.addEventListener('mousedown',  e => onStart(e.clientX, e.clientY));
-  canvas.addEventListener('mousemove',  e => { if(isDrawing) onMove(e.clientX, e.clientY); });
-  canvas.addEventListener('mouseup',    () => onEnd());
+  canvas.addEventListener('mousedown',  e => { if (!panMode) onStart(e.clientX, e.clientY); });
+  canvas.addEventListener('mousemove',  e => { if (!panMode && isDrawing) onMove(e.clientX, e.clientY); });
+  canvas.addEventListener('mouseup',    () => { if (!panMode) onEnd(); });
 }
 
 // ══════════════════════════════════════════════
@@ -1938,8 +2089,8 @@ function renderHistory() {
           ${area ? `<span class="badge badge-area">📐 ${area}</span>` : ''}
         </div>
       </div>
-      <div class="record-sync ${r.synced?'synced':''}">
-        ${r.synced ? '☁️' : '🔄'}
+      <div class="record-sync ${syncingIds.has(r.id) ? 'syncing' : r.synced ? 'synced' : r.syncFailed ? 'failed' : ''}">
+        ${syncingIds.has(r.id) ? '⏳' : r.synced ? '☁️' : r.syncFailed ? '⚠️' : '🔄'}
       </div>
     </div>`;
   }).join('');
@@ -1961,16 +2112,139 @@ function filterRecords(group, el) {
   renderHistory();
 }
 
+// ── ID do registro aberto no painel ──
+let _sheetRecordId = null;
+
 function showRecord(id) {
   const r = state.records.find(x => x.id === id);
   if (!r) return;
-  const area = r.analysis ? `\nÁrea: ${r.analysis.areaMm2.toFixed(4)} mm²` : '';
-  const msg  = `${r.animalId} — ${formatDate(r.date)}\nGrupo: ${r.group} | Dia ${r.dia}${area}\n\nArquivo: ${r.fileName}\nPasta: ${r.folderPath}\n\nObs: ${r.observations||'Nenhuma'}\n\nApagar este registro?`;
-  if (confirm(msg)) {
-    state.records = state.records.filter(x => x.id !== id);
-    saveState(); renderHistory();
-    showToast('🗑 Registro apagado');
+  _sheetRecordId = id;
+
+  // Foto
+  const photoEl = document.getElementById('rsheetPhoto');
+  if (r.photo) {
+    photoEl.innerHTML = `<img class="rsheet-photo" src="${r.photo}" onclick="openZoomSrc('${r.photo}')">`;
+  } else {
+    photoEl.innerHTML = `<div class="rsheet-photo-empty">🐀</div>`;
   }
+
+  // Título
+  document.getElementById('rsheetTitle').textContent = r.animalId;
+  document.getElementById('rsheetSub').textContent   =
+    `${formatDate(r.date)} · ${r.group} · Dia ${String(r.dia).padStart(2,'0')}`;
+
+  // Badges
+  const ai = r.aiResult || {};
+  const hasAI = ai.granulacao != null;
+  document.getElementById('rsheetBadges').innerHTML =
+    `<span class="badge badge-group">${r.group}</span>` +
+    `<span class="badge badge-dia">Dia ${String(r.dia).padStart(2,'0')}</span>` +
+    (r.fotoDia ? `<span class="badge badge-dia">${r.fotoDia}</span>` : '') +
+    (r.analysis ? `<span class="badge badge-area">📐 ${r.analysis.areaMm2.toFixed(2)} mm²</span>` : '') +
+    (hasAI     ? `<span class="badge" style="background:#DBEAFE;color:#1D4ED8">🤖 IA</span>` : '');
+
+  // Linhas de detalhes
+  const rows = [
+    ['Arquivo',   r.fileName   || '—'],
+    ['Pasta',     r.folderPath || '—'],
+    ['Obs.',      r.observations || '—'],
+  ];
+  if (r.analysis) {
+    rows.push(['Área',        r.analysis.areaMm2.toFixed(5) + ' mm²']);
+    rows.push(['Comprimento', (r.analysis.lengthMm||'—') + ' mm']);
+    rows.push(['Largura',     (r.analysis.widthMm ? r.analysis.widthMm.toFixed(2) : '—') + ' mm']);
+  }
+  if (hasAI) {
+    rows.push(['IA Hiperemia',   (ai.hiperemia  ?? '—') + '/5']);
+    rows.push(['IA Crosta',      (ai.crosta     ?? '—') + '/5']);
+    rows.push(['IA Necrose',     (ai.necrose    ?? '—') + '/5']);
+    rows.push(['IA Granulação',  (ai.granulacao ?? '—') + '/5']);
+    rows.push(['IA Cicatricial', (ai.cicatricial?? '—') + '/5']);
+    if (ai.observacoes) rows.push(['IA Obs.', ai.observacoes]);
+  }
+  document.getElementById('rsheetRows').innerHTML =
+    rows.map(([l,v]) =>
+      `<div class="rsheet-row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`
+    ).join('');
+
+  // Status de sync
+  renderSheetSyncStatus(r);
+
+  document.getElementById('recordSheet').classList.add('open');
+}
+
+function renderSheetSyncStatus(r) {
+  const el        = document.getElementById('rsheetSync');
+  const btnResync = document.getElementById('btnResync');
+  const sending   = syncingIds.has(r.id);
+
+  if (sending) {
+    el.className = 'rsheet-sync fail'; // amarelo
+    el.innerHTML = `<span class="sync-icon" style="animation:syncpulse 1s infinite">⏳</span>
+      <span class="sync-msg">Enviando para o Drive e Sheets...</span>`;
+    btnResync.textContent = '⏳ Enviando...';
+    btnResync.disabled    = true;
+  } else if (r.synced) {
+    el.className = 'rsheet-sync ok';
+    el.innerHTML = `<span class="sync-icon">☁️</span>
+      <span class="sync-msg">Confirmado — salvo no Drive e Sheets</span>`;
+    btnResync.textContent = '🔄 Reenviar novamente';
+    btnResync.disabled    = !state.sheetsUrl;
+  } else if (r.syncFailed) {
+    el.className = 'rsheet-sync fail';
+    el.innerHTML = `<span class="sync-icon">⚠️</span>
+      <span class="sync-msg">Falha no envio — salvo só no celular</span>`;
+    btnResync.textContent = '☁️ Tentar novamente';
+    btnResync.disabled    = !state.sheetsUrl;
+  } else {
+    el.className = 'rsheet-sync fail';
+    el.innerHTML = `<span class="sync-icon">🔄</span>
+      <span class="sync-msg">Ainda não enviado — salvo só no celular</span>`;
+    btnResync.textContent = '☁️ Enviar para o Drive agora';
+    btnResync.disabled    = !state.sheetsUrl;
+  }
+}
+
+function closeRecordSheet(e) {
+  // Fecha ao clicar no fundo escuro (não no painel em si)
+  if (e && e.target.id !== 'recordSheet') return;
+  document.getElementById('recordSheet').classList.remove('open');
+  _sheetRecordId = null;
+}
+
+async function resyncCurrentRecord() {
+  const r = state.records.find(x => x.id === _sheetRecordId);
+  if (!r) return;
+  if (!state.sheetsUrl) { showToast('⚠ Configure a URL do Apps Script no Config'); return; }
+
+  const btn = document.getElementById('btnResync');
+  btn.textContent = '⏳ Enviando...';
+  btn.disabled    = true;
+
+  await syncRecord(r);
+
+  // Atualiza o status no painel
+  const updated = state.records.find(x => x.id === _sheetRecordId);
+  if (updated) renderSheetSyncStatus(updated);
+  btn.disabled = false;
+}
+
+function deleteCurrentRecord() {
+  const r = state.records.find(x => x.id === _sheetRecordId);
+  if (!r) return;
+  if (!confirm(`Apagar registro?\n${r.animalId} · ${r.fotoDia} · Dia ${r.dia}`)) return;
+  state.records = state.records.filter(x => x.id !== _sheetRecordId);
+  saveState();
+  renderHistory();
+  document.getElementById('recordSheet').classList.remove('open');
+  _sheetRecordId = null;
+  showToast('🗑 Registro apagado');
+}
+
+// Abre zoom a partir de uma src direta (usado na foto do painel)
+function openZoomSrc(src) {
+  document.getElementById('zoomImg').src = src;
+  document.getElementById('zoomOverlay').classList.add('open');
 }
 
 function formatDate(d) {
@@ -2102,8 +2376,18 @@ function removeDia(d) {
 // ═══════════════════════════════════════════════
 //  GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════
+
+// IDs dos registros que estão sendo enviados agora (mostra ⏳ animado no card)
+const syncingIds = new Set();
+
 async function syncRecord(record) {
   if (!state.sheetsUrl) return;
+
+  // Marca como "enviando" e atualiza o card imediatamente
+  syncingIds.add(record.id);
+  record.syncFailed = false;
+  renderHistory();
+
   try {
     const ai = record.aiResult || {};
     const payload = {
@@ -2132,22 +2416,31 @@ async function syncRecord(record) {
       timestamp:    record.createdAt
     };
 
-    showBanner('☁️ Enviando para o Drive e Sheets...');
-    const res = await fetch(state.sheetsUrl, {
+    const res  = await fetch(state.sheetsUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
+      // Sem Content-Type: evita preflight CORS que o Apps Script não suporta
     });
-
     const json = await res.json().catch(()=>({success:false}));
+
     if (res.ok && json.success) {
-      record.synced = true;
-      saveState(); renderHistory();
-      showBanner('✔ Salvo no Drive e Sheets!', false, 2500);
-    } else throw new Error(json.error || 'HTTP ' + res.status);
+      record.synced     = true;
+      record.syncFailed = false;
+      saveState();
+    } else {
+      throw new Error(json.error || 'HTTP ' + res.status);
+    }
 
   } catch(e) {
-    showBanner('⚠ Falha: ' + e.message + ' — salvo localmente', true, 4000);
+    record.synced     = false;
+    record.syncFailed = true;
+    saveState();
+    showBanner('⚠ Falha ao enviar — toque no registro para reenviar', true, 5000);
+  } finally {
+    syncingIds.delete(record.id);
+    renderHistory();
+    // Atualiza painel de detalhes se estiver aberto para este registro
+    if (_sheetRecordId === record.id) renderSheetSyncStatus(record);
   }
 }
 
