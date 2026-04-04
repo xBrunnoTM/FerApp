@@ -1,0 +1,2237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#14532D">
+  <title>FerApp</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green-900: #14532D;
+      --green-800: #166534;
+      --green-700: #15803D;
+      --green-600: #16A34A;
+      --green-400: #4ADE80;
+      --green-100: #DCFCE7;
+      --green-50:  #F0FDF4;
+      --red-500:   #EF4444;
+      --red-100:   #FEE2E2;
+      --blue-600:  #2563EB;
+      --blue-100:  #DBEAFE;
+      --amber-500: #F59E0B;
+      --amber-100: #FEF3C7;
+      --gray-900:  #111827;
+      --gray-700:  #374151;
+      --gray-500:  #6B7280;
+      --gray-300:  #D1D5DB;
+      --gray-100:  #F3F4F6;
+      --white:     #FFFFFF;
+      --shadow:    0 2px 12px rgba(0,0,0,0.10);
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
+    html, body {
+      height: 100%; width: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-900);
+      overflow: hidden;
+    }
+    #app {
+      display: flex; flex-direction: column;
+      height: 100dvh; max-width: 480px;
+      margin: 0 auto; background: var(--gray-100);
+      position: relative; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--green-800);
+      padding: 14px 20px 12px;
+      display: flex; align-items: center; gap: 12px;
+      flex-shrink: 0;
+    }
+    .header-icon {
+      width: 36px; height: 36px; background: var(--green-600);
+      border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; font-size: 20px;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; color: var(--white); }
+    .header p  { font-size: 12px; color: rgba(255,255,255,0.65); margin-top: 1px; }
+
+    /* ── Nav ── */
+    .nav {
+      display: flex; background: var(--white);
+      border-bottom: 1px solid var(--gray-300); flex-shrink: 0;
+    }
+    .nav-btn {
+      flex: 1; padding: 12px 4px 10px;
+      background: none; border: none; cursor: pointer;
+      font-size: 11px; color: var(--gray-500);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      transition: color .2s;
+    }
+    .nav-btn.active { color: var(--green-700); }
+    .nav-btn .icon  { font-size: 22px; }
+
+    /* ── Screens ── */
+    .screen {
+      flex: 1; overflow-y: auto; display: none;
+      padding: 16px; padding-bottom: 28px;
+    }
+    .screen.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white); border-radius: var(--radius);
+      padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow);
+    }
+    .card-title {
+      font-size: 13px; font-weight: 700;
+      color: var(--green-800); margin-bottom: 14px;
+      text-transform: uppercase; letter-spacing: .5px;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ── Fields ── */
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--gray-700); margin-bottom: 6px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 12px 14px;
+      border: 1.5px solid var(--gray-300); border-radius: var(--radius-sm);
+      font-size: 16px; color: var(--gray-900); background: var(--white);
+      outline: none; -webkit-appearance: none; appearance: none;
+      transition: border-color .2s;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--green-600);
+    }
+    .field textarea { resize: none; min-height: 80px; }
+    .field-row { display: flex; gap: 10px; }
+    .field-row .field { flex: 1; }
+
+    /* ── Drive path preview ── */
+    .drive-path {
+      background: var(--amber-100); border: 1.5px solid #FCD34D;
+      border-radius: var(--radius-sm); padding: 10px 12px;
+      font-size: 12px; color: #78350F; line-height: 1.7;
+      margin-top: -4px; margin-bottom: 14px;
+      display: none;
+    }
+    .drive-path.show { display: block; }
+    .drive-path strong { color: #92400E; }
+    .drive-path .path-line { display: flex; align-items: flex-start; gap: 5px; }
+    .drive-path .path-line span { word-break: break-all; }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm);
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: all .2s; display: flex; align-items: center;
+      justify-content: center; gap: 8px;
+    }
+    .btn-primary  { background: var(--green-700); color: var(--white); }
+    .btn-primary:active { background: var(--green-900); transform: scale(.98); }
+    .btn-secondary { background: var(--gray-100); color: var(--gray-700); border: 1.5px solid var(--gray-300); }
+    .btn-danger   { background: var(--red-100); color: var(--red-500); border: 1.5px solid #FECACA; }
+    .btn-sm       { padding: 9px 14px; font-size: 14px; border-radius: var(--radius-sm); width: auto; }
+    .btn-analyze  { background: var(--blue-100); color: var(--blue-600); border: 1.5px solid #BFDBFE; margin-top: 10px; }
+
+    /* ── Photo ── */
+    .photo-area {
+      border: 2px dashed var(--gray-300); border-radius: var(--radius-sm);
+      min-height: 180px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
+      cursor: pointer; background: var(--gray-100);
+      position: relative; overflow: hidden; transition: border-color .2s;
+    }
+    .photo-area:hover { border-color: var(--green-600); }
+    .photo-area img {
+      width: 100%; height: 100%; object-fit: cover;
+      position: absolute; top: 0; left: 0;
+      border-radius: calc(var(--radius-sm) - 2px);
+    }
+    .photo-placeholder { text-align: center; color: var(--gray-500); }
+    .photo-placeholder .icon { font-size: 40px; display: block; }
+    .photo-placeholder span  { font-size: 14px; margin-top: 6px; display: block; }
+    #photoInput { display: none; }
+
+    /* ── Result box ── */
+    .result-box {
+      background: var(--green-50); border: 1.5px solid var(--green-400);
+      border-radius: var(--radius-sm); padding: 14px; margin-top: 12px; display: none;
+    }
+    .result-box.show { display: block; }
+    .result-box h3 { font-size: 13px; color: var(--green-800); font-weight: 700; margin-bottom: 8px; }
+    .result-value { font-size: 28px; font-weight: 800; color: var(--green-700); line-height: 1; }
+    .result-value span { font-size: 16px; font-weight: 500; color: var(--gray-500); }
+    .result-details { font-size: 12px; color: var(--gray-500); margin-top: 6px; line-height: 1.5; }
+
+    /* ── Analysis Modal ── */
+    #analysisModal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+      z-index: 100; display: none; flex-direction: column;
+    }
+    #analysisModal.open { display: flex; }
+    .modal-header {
+      padding: 16px 20px; display: flex; align-items: center;
+      justify-content: space-between; color: var(--white);
+    }
+    .modal-header h2 { font-size: 17px; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--white); font-size: 28px; cursor: pointer; }
+    .canvas-wrap {
+      flex: 1; overflow: auto; background: #000; position: relative;
+    }
+    #canvasZoomWrap {
+      display: inline-block; line-height: 0;
+    }
+    #analysisCanvas { display: block; border-radius: 0; }
+    .zoom-bar {
+      position: absolute; top: 8px; right: 8px; z-index: 10;
+      display: flex; gap: 4px; align-items: center;
+    }
+    .zoom-btn {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: rgba(0,0,0,0.65); border: 1.5px solid rgba(255,255,255,0.2);
+      color: #fff; font-size: 18px; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .zoom-label {
+      padding: 4px 8px; border-radius: 8px;
+      background: rgba(0,0,0,0.55); color: #9CA3AF;
+      font-size: 12px; font-weight: 700;
+      backdrop-filter: blur(4px);
+    }
+    .modal-controls {
+      background: var(--gray-900); padding: 16px 20px 24px;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .slider-row label { font-size: 13px; color: var(--gray-300); white-space: nowrap; }
+    .slider-row input[type=range] { flex: 1; accent-color: var(--green-400); height: 4px; }
+    .slider-val { font-size: 13px; color: var(--green-400); min-width: 32px; text-align: right; }
+    .modal-input { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .modal-input label { font-size: 13px; color: var(--gray-300); white-space: nowrap; }
+    .modal-input input {
+      flex: 1; padding: 10px 12px; border-radius: var(--radius-sm);
+      border: 1.5px solid #4B5563; background: #374151;
+      color: var(--white); font-size: 16px; outline: none;
+    }
+    .modal-input input:focus { border-color: var(--green-400); }
+    .modal-input .unit { font-size: 13px; color: var(--gray-400); white-space: nowrap; }
+    #modalResult {
+      background: var(--green-900); border-radius: var(--radius-sm);
+      padding: 12px 14px; margin-bottom: 14px; display: none;
+    }
+    #modalResult.show { display: block; }
+    #modalResult .area-val { font-size: 24px; font-weight: 800; color: var(--green-400); }
+    #modalResult .area-val span { font-size: 14px; color: var(--gray-400); }
+    #modalResult .area-detail { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btns .btn { flex: 1; }
+    .btn-confirm  { background: var(--green-700); color: var(--white); font-size: 15px; font-weight: 700; padding: 14px; }
+    .btn-redetect { background: #374151; color: var(--gray-300); font-size: 13px; padding: 10px 12px; border: 1px solid #4B5563; }
+
+    /* ── Step bar (dois traçados) ── */
+    .step-bar { display:flex; gap:8px; margin-bottom:12px; }
+    .step-btn {
+      flex:1; padding:10px 6px; background:#1F2937;
+      border:2px solid #4B5563; border-radius:var(--radius-sm);
+      color:#9CA3AF; font-size:12px; font-weight:700; cursor:pointer;
+      transition:all .2s; text-align:center; line-height:1.4;
+    }
+    .step-btn.ref-active   { border-color:#F59E0B; color:#F59E0B; }
+    .step-btn.wound-active { border-color:#EF4444; color:#EF4444; }
+    .step-btn.step-done    { opacity:.55; }
+    .btn-eraser-on { border-color:#F59E0B !important; color:#F59E0B !important; background:#292524 !important; }
+    .ref-size-row { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+    .ref-size-row label { font-size:12px; color:var(--gray-300); white-space:nowrap; flex-shrink:0; }
+    .ref-size-row input { width:70px; padding:8px 10px; border-radius:var(--radius-sm); border:1.5px solid #4B5563; background:#374151; color:var(--white); font-size:15px; outline:none; text-align:center; }
+    .ref-size-row input:focus { border-color:#F59E0B; }
+    .ref-size-row .unit { font-size:12px; color:#9CA3AF; }
+
+    /* ── Mode Tabs ── */
+    .mode-tabs {
+      display: flex; background: #1F2937; flex-shrink: 0;
+      border-bottom: 2px solid #374151;
+    }
+    .mode-tab {
+      flex: 1; padding: 11px 8px; background: none; border: none;
+      color: #9CA3AF; font-size: 14px; font-weight: 600; cursor: pointer;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      transition: all .2s;
+    }
+    .mode-tab.active { color: var(--green-400); border-bottom-color: var(--green-400); }
+
+    /* ── Trace hint ── */
+    .trace-hint {
+      text-align: center; padding: 7px 16px; font-size: 13px;
+      color: #FCD34D; background: #1F2937; flex-shrink: 0;
+      border-bottom: 1px solid #374151; font-weight: 500;
+    }
+
+    /* ── Trace actions row ── */
+    .trace-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    /* ── Canvas cursor ── */
+    #analysisCanvas { cursor: crosshair; touch-action: none; max-width: none; }
+
+    /* ── History ── */
+    .history-empty { text-align: center; padding: 40px 20px; color: var(--gray-500); }
+    .history-empty .icon { font-size: 48px; display: block; margin-bottom: 12px; }
+    .record-card {
+      background: var(--white); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow);
+      cursor: pointer; display: flex; gap: 14px; align-items: center;
+      transition: transform .15s;
+    }
+    .record-card:active { transform: scale(.98); }
+    .record-thumb {
+      width: 54px; height: 54px; border-radius: var(--radius-sm);
+      background: var(--gray-100); flex-shrink: 0; overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: var(--gray-400);
+    }
+    .record-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .record-info { flex: 1; min-width: 0; }
+    .record-info .id { font-weight: 700; font-size: 15px; color: var(--gray-900); }
+    .record-info .meta { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
+    .record-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .badge-group   { background: var(--blue-100); color: var(--blue-600); }
+    .badge-dia     { background: var(--amber-100); color: #92400E; }
+    .badge-area    { background: var(--green-100); color: var(--green-700); }
+    .record-sync   { font-size: 18px; color: var(--gray-300); flex-shrink: 0; }
+    .record-sync.synced { color: var(--green-600); }
+
+    /* ── Filters ── */
+    .filter-bar {
+      display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto;
+      padding-bottom: 4px; scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    .filter-chip {
+      padding: 6px 14px; border-radius: 999px;
+      border: 1.5px solid var(--gray-300); background: var(--white);
+      font-size: 13px; font-weight: 600; color: var(--gray-500);
+      cursor: pointer; white-space: nowrap; transition: all .2s;
+    }
+    .filter-chip.active { background: var(--green-800); color: var(--white); border-color: var(--green-800); }
+
+    /* ── Config ── */
+    .config-section-title {
+      font-size: 13px; font-weight: 700; color: var(--green-800);
+      text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px;
+    }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag {
+      padding: 5px 10px; border-radius: var(--radius-sm);
+      background: var(--gray-100); font-size: 13px; color: var(--gray-700);
+      display: flex; align-items: center; gap: 5px;
+    }
+    .tag-remove { background: none; border: none; cursor: pointer; color: var(--gray-400); font-size: 16px; padding: 0 0 0 2px; }
+    .tag-add-row { display: flex; gap: 8px; margin-top: 10px; }
+    .tag-add-row input {
+      flex: 1; padding: 10px 12px;
+      border: 1.5px solid var(--gray-300); border-radius: var(--radius-sm);
+      font-size: 15px; outline: none;
+    }
+    .tag-add-row input:focus { border-color: var(--green-600); }
+
+    /* ── Sync / Toast ── */
+    #syncBanner {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      background: var(--green-700); color: var(--white);
+      padding: 10px 20px; border-radius: 0 0 12px 12px;
+      font-size: 14px; font-weight: 600; z-index: 200; display: none;
+      max-width: 480px; width: 100%; text-align: center;
+    }
+    #syncBanner.show { display: block; }
+    #syncBanner.error { background: var(--red-500); }
+    #toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: var(--gray-900); color: var(--white);
+      padding: 10px 20px; border-radius: 999px;
+      font-size: 14px; font-weight: 500; z-index: 300;
+      opacity: 0; transition: opacity .3s; white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+    .info-text {
+      font-size: 12px; color: var(--gray-500); background: var(--gray-100);
+      border-radius: var(--radius-sm); padding: 10px 12px;
+      line-height: 1.6; margin-top: 8px;
+    }
+    .info-text strong { color: var(--gray-700); }
+    code { font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; }
+
+    /* ── Zoom Overlay ── */
+    #zoomOverlay {
+      position: fixed; inset: 0; z-index: 9000;
+      background: rgba(0,0,0,0.93);
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+    }
+    #zoomOverlay.open { display: flex; }
+    #zoomOverlay img  {
+      max-width: 96vw; max-height: 80vh;
+      object-fit: contain; border-radius: 8px;
+    }
+    #zoomClose {
+      padding: 10px 32px; border-radius: 999px;
+      background: rgba(255,255,255,0.15); border: 1.5px solid rgba(255,255,255,0.35);
+      color: #fff; font-size: 16px; font-weight: 600; cursor: pointer;
+      transition: background .2s;
+    }
+    #zoomClose:active { background: rgba(255,255,255,0.3); }
+
+    /* ── AI Result ── */
+    .btn-ai {
+      width: 100%; padding: 13px;
+      background: #2563EB; color: #fff;
+      border: none; border-radius: var(--radius-sm);
+      font-size: 15px; font-weight: 700; cursor: pointer;
+      display: none; align-items: center; justify-content: center; gap: 8px;
+      margin-top: 8px;
+    }
+    .btn-ai:active { opacity: 0.85; }
+    .ai-result-box {
+      background: var(--blue-100); border-radius: var(--radius-sm);
+      padding: 14px; margin-top: 10px; display: none;
+    }
+    .ai-result-box.show { display: block; }
+    .ai-result-box h4 {
+      font-size: 13px; font-weight: 700; color: var(--blue-600);
+      margin-bottom: 10px; text-transform: uppercase; letter-spacing: .4px;
+    }
+    .ai-param-row  { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 13px; }
+    .ai-param-label{ flex: 1.4; color: var(--gray-700); }
+    .ai-param-score{ font-weight: 800; color: var(--blue-600); min-width: 18px; text-align:right; }
+    .ai-param-bar  { flex: 1; height: 6px; background: rgba(0,0,0,0.1); border-radius: 3px; overflow: hidden; }
+    .ai-param-fill { height: 100%; background: #2563EB; border-radius: 3px; transition: width .4s; }
+    .ai-obs        { font-size: 12px; color: var(--gray-600); margin-top: 10px; font-style: italic; line-height: 1.5; }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div class="header">
+    <div class="header-icon">🐀</div>
+    <div>
+      <h1>FerApp</h1>
+      <p>Registro de Feridas — Doutorado</p>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <button class="nav-btn active" onclick="showTab('registro')" id="btn-registro">
+      <span class="icon">📋</span>Registrar
+    </button>
+    <button class="nav-btn" onclick="showTab('historico')" id="btn-historico">
+      <span class="icon">🗂️</span>Histórico
+    </button>
+    <button class="nav-btn" onclick="showTab('config')" id="btn-config">
+      <span class="icon">⚙️</span>Config
+    </button>
+  </nav>
+
+  <!-- ══ TAB: REGISTRAR ══ -->
+  <div class="screen active" id="screen-registro">
+
+    <div class="card">
+      <div class="card-title">🐭 Dados do Animal</div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Animal *</label>
+          <select id="animalId" onchange="updateDrivePath()">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Data *</label>
+          <input type="date" id="recordDate">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Grupo / Tratamento *</label>
+          <select id="groupSelect" onchange="updateDrivePath()">
+            <option value="">— Selecione —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Grupo Dia Experimental *</label>
+          <select id="diaSelect" onchange="updateDrivePath()">
+            <option value="">— Dia —</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label>Dia da Foto *</label>
+          <select id="fotoDiaSelect" onchange="updateDrivePath()">
+            <option value="">— FotoDia —</option>
+          </select>
+        </div>
+        <div class="field"><!-- espaço reservado --></div>
+      </div>
+
+      <!-- Drive path preview -->
+      <div class="drive-path" id="drivePath">
+        <div style="font-weight:700; margin-bottom:4px;">📁 Destino no Drive:</div>
+        <div class="path-line">📂 <span id="pathText">—</span></div>
+        <div class="path-line" style="margin-top:3px;">🖼️ <span id="fileNameText" style="font-weight:600">—</span></div>
+      </div>
+
+      <div class="field">
+        <label>Observações</label>
+        <textarea id="observations" placeholder="Comportamento do animal, intercorrências, aparência da ferida..."></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📷 Foto e Análise da Ferida</div>
+
+      <div class="photo-area" id="photoArea" onclick="photoAreaClick(event)">
+        <div class="photo-placeholder">
+          <span class="icon">📸</span>
+          <span>Toque para tirar foto</span>
+        </div>
+        <img id="photoPreview" style="display:none" title="Toque para ampliar">
+      </div>
+      <input type="file" id="photoInput" accept="image/*" capture="environment">
+
+      <button class="btn btn-analyze" id="btnAnalyze" style="display:none" onclick="openAnalysisModal()">
+        🔬 Analisar Área da Ferida
+      </button>
+
+      <button class="btn-ai" id="btnAI" onclick="analyzeWithAI()">
+        🤖 Análise Clínica com IA
+      </button>
+
+      <div class="result-box" id="resultBox">
+        <h3>📐 Resultado da Análise</h3>
+        <div class="result-value" id="resultArea">— <span>mm²</span></div>
+        <div class="result-details" id="resultDetails"></div>
+      </div>
+
+      <div class="ai-result-box" id="aiResultBox">
+        <h4>🤖 Avaliação Clínica — IA</h4>
+        <div id="aiParamsContainer"></div>
+        <div class="ai-obs" id="aiObs"></div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveRecord()">💾 Salvar e Enviar</button>
+    <div style="height:12px"></div>
+  </div>
+
+  <!-- ══ TAB: HISTÓRICO ══ -->
+  <div class="screen" id="screen-historico">
+    <div class="filter-bar" id="filterBar"></div>
+    <div id="historyList"></div>
+  </div>
+
+  <!-- ══ TAB: CONFIG ══ -->
+  <div class="screen" id="screen-config">
+
+    <div class="card">
+      <div class="card-title">🔗 Google Apps Script</div>
+      <div class="field">
+        <label>URL do Web App</label>
+        <input type="url" id="sheetsUrl" placeholder="https://script.google.com/macros/s/..." autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Pasta raiz no Drive</label>
+        <input type="text" id="pastaRaiz" placeholder="Doutorado" autocomplete="off">
+      </div>
+      <div class="info-text">
+        Cole aqui a URL gerada ao implantar o <code>backend_apps_script.gs</code>.<br>
+        <strong>Sem isso</strong>, os dados ficam salvos apenas no celular (CSV exportável).<br>
+        <strong>Com isso</strong>, cada registro vai automaticamente para o Drive e Sheets.
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="testSheets()">
+        🧪 Testar Conexão
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔑 OpenAI (Análise por IA)</div>
+      <div class="field">
+        <label>Chave API OpenAI</label>
+        <input type="password" id="openaiKey" placeholder="sk-..." autocomplete="off">
+      </div>
+      <div class="info-text">
+        Cole sua chave do OpenAI aqui. Fica salva <strong>só no seu celular</strong>, nunca é enviada a nenhum servidor externo além da própria OpenAI ao analisar.
+        <br>Obtenha em: <strong>platform.openai.com → API Keys</strong>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="saveOpenAIKey()">💾 Salvar Chave</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📅 Dias da Foto</div>
+      <div class="tag-list" id="fotoDiasList"></div>
+      <div class="tag-add-row">
+        <input type="text" id="newFotoDia" placeholder="Ex: FotoDia22" maxlength="20">
+        <button class="btn btn-primary btn-sm" onclick="addFotoDia()">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🐀 Animais</div>
+      <div class="tag-list" id="animalsList"></div>
+      <div class="tag-add-row">
+        <input type="text" id="newAnimal" placeholder="Ex: Animal_13" maxlength="30">
+        <button class="btn btn-primary btn-sm" onclick="addAnimal()">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🏷️ Grupos / Tratamentos</div>
+      <div class="tag-list" id="groupsList"></div>
+      <div class="tag-add-row">
+        <input type="text" id="newGroup" placeholder="Nome do grupo" maxlength="40">
+        <button class="btn btn-primary btn-sm" onclick="addGroup()">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📅 Dias Experimentais</div>
+      <div class="tag-list" id="diasList"></div>
+      <div class="tag-add-row">
+        <input type="number" id="newDia" placeholder="Dia (ex: 28)" min="1" max="365">
+        <button class="btn btn-primary btn-sm" onclick="addDia()">+ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📤 Dados</div>
+      <button class="btn btn-secondary" style="margin-bottom:10px" onclick="exportCSV()">
+        📊 Exportar CSV
+      </button>
+      <button class="btn btn-danger" onclick="syncAllPending()">
+        ☁️ Reenviar Não Sincronizados
+      </button>
+      <button class="btn btn-danger" style="margin-top:10px" onclick="clearAll()">
+        🗑️ Apagar Todos os Registros
+      </button>
+    </div>
+
+    <div style="height:12px"></div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ══ MODAL DE ANÁLISE ══ -->
+<div id="analysisModal">
+  <div class="modal-header">
+    <h2>📐 Análise da Ferida</h2>
+    <button class="modal-close" onclick="closeAnalysisModal()">✕</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" id="tabDual"   onclick="setMode('dual')">✏️ Ref+Ferida</button>
+    <button class="mode-tab"        id="tabSingle" onclick="setMode('single')">📏 Comprimento</button>
+    <button class="mode-tab"        id="tabAuto"   onclick="setMode('auto')">🔬 Auto</button>
+  </div>
+
+  <!-- Instrução contextual -->
+  <div id="traceHint" class="trace-hint">① Desenhe o contorno do círculo de referência</div>
+
+  <!-- Canvas -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <div id="canvasZoomWrap">
+      <canvas id="analysisCanvas"></canvas>
+    </div>
+    <!-- Zoom controls (overlay, bottom-right) -->
+    <div class="zoom-bar">
+      <button class="zoom-btn" onclick="adjustZoom(-0.5)" title="Diminuir zoom">−</button>
+      <span class="zoom-label" id="zoomLabel">1×</span>
+      <button class="zoom-btn" onclick="adjustZoom(+0.5)" title="Aumentar zoom">+</button>
+      <button class="zoom-btn" onclick="adjustZoom(0, true)" title="Resetar zoom" style="font-size:14px">1:1</button>
+    </div>
+  </div>
+
+  <!-- Controles -->
+  <div class="modal-controls">
+
+    <!-- Modo: Dois Traçados -->
+    <div id="ctrlDual">
+      <div class="ref-size-row">
+        <label>Diâm. referência impressa</label>
+        <input type="number" id="refSizeInput" value="10" step="0.5" min="1" max="200">
+        <span class="unit">mm</span>
+      </div>
+      <div class="step-bar">
+        <button id="stepRef"   class="step-btn ref-active" onclick="setActiveTrace('ref')">🟡 ① Referência</button>
+        <button id="stepWound" class="step-btn"            onclick="setActiveTrace('wound')">🔴 ② Ferida</button>
+      </div>
+      <div class="trace-actions">
+        <button class="btn btn-redetect" onclick="clearRef()"      style="flex:1">🗑 Ref.</button>
+        <button class="btn btn-redetect" onclick="clearWound()"    style="flex:1">🗑 Ferida</button>
+        <button class="btn btn-redetect" onclick="undoLastPoint()" style="flex:1">↩</button>
+      </div>
+    </div>
+
+    <!-- Modo: Comprimento Manual (single trace) -->
+    <div id="ctrlSingle" style="display:none">
+      <div class="trace-actions">
+        <button class="btn btn-redetect" onclick="clearTrace()"    style="flex:1">🗑 Apagar Traçado</button>
+        <button class="btn btn-redetect" onclick="undoLastPoint()" style="flex:1">↩ Desfazer</button>
+      </div>
+    </div>
+
+    <!-- Modo: Auto -->
+    <div id="ctrlAuto" style="display:none">
+      <div class="slider-row">
+        <label>Sensibilidade</label>
+        <input type="range" id="sensitivitySlider" min="10" max="90" value="45" oninput="onSliderChange(this)">
+        <span class="slider-val" id="sensitivityVal">45%</span>
+      </div>
+      <div class="trace-actions" style="margin-bottom:10px">
+        <button class="btn btn-redetect" onclick="runDetection()" style="flex:1">🔄 Detectar</button>
+        <button class="btn btn-redetect" id="btnEraser" onclick="toggleEraser()" style="flex:1">🧹 Borracha</button>
+      </div>
+      <div class="slider-row" id="eraserRow" style="display:none; margin-bottom:10px">
+        <label>Tamanho</label>
+        <input type="range" id="eraserSize" min="5" max="60" value="20"
+               oninput="document.getElementById('eraserSizeVal').textContent=this.value">
+        <span class="slider-val" id="eraserSizeVal">20</span>
+      </div>
+    </div>
+
+    <!-- Comprimento — visível apenas em single e auto -->
+    <div class="modal-input" id="lengthRow" style="display:none">
+      <label>Comprimento da ferida</label>
+      <input type="number" id="lengthInput" placeholder="ex: 8.5" step="0.1" min="0.1" oninput="onLengthChange()">
+      <span class="unit">mm</span>
+    </div>
+
+    <div id="modalResult">
+      <div class="area-val" id="modalAreaVal">— <span>mm²</span></div>
+      <div class="area-detail" id="modalAreaDetail"></div>
+    </div>
+
+    <button class="btn btn-confirm" onclick="confirmAnalysis()">✔ Usar Este Resultado</button>
+  </div>
+</div>
+
+<!-- ══ ZOOM OVERLAY ══ -->
+<div id="zoomOverlay" onclick="closeZoom()">
+  <img id="zoomImg" alt="Foto ampliada">
+  <button id="zoomClose" onclick="closeZoom()">✕ Fechar</button>
+</div>
+
+<div id="syncBanner"></div>
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  ESTADO
+// ═══════════════════════════════════════════════
+const DEFAULT_GROUPS    = ['Branco', 'Protium', 'Sulfadiazina de Prata'];
+const DEFAULT_DIAS      = [3, 7, 10, 14, 21];
+const DEFAULT_ANIMALS   = Array.from({length:12}, (_,i) => `Animal_${String(i+1).padStart(2,'0')}`);
+const DEFAULT_FOTO_DIAS = Array.from({length:21}, (_,i) => `FotoDia${String(i+1).padStart(2,'0')}`);
+
+let state = {
+  records:    [],
+  groups:     [...DEFAULT_GROUPS],
+  dias:       [...DEFAULT_DIAS],
+  animals:    [...DEFAULT_ANIMALS],
+  fotoDias:   [...DEFAULT_FOTO_DIAS],
+  openaiKey:  '',
+  sheetsUrl:  '',
+  pastaRaiz:  'Doutorado',
+  filterGroup: 'all',
+  // Form ephemeral
+  currentPhoto:    null,
+  analysisResult:  null,
+  aiResult:        null,
+};
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+(function init() {
+  const saved = localStorage.getItem('ferapp_v2');
+  if (saved) {
+    try { Object.assign(state, JSON.parse(saved)); } catch(e) {}
+  }
+  // Reset ephemeral
+  state.currentPhoto   = null;
+  state.analysisResult = null;
+
+  document.getElementById('recordDate').value = todayStr();
+  document.getElementById('sheetsUrl').value  = state.sheetsUrl  || '';
+  document.getElementById('pastaRaiz').value  = state.pastaRaiz || 'Doutorado';
+  document.getElementById('openaiKey').value  = state.openaiKey  || '';
+
+  renderAnimalSelect();
+  renderGroupSelect();
+  renderDiaSelect();
+  renderFotoDiaSelect();
+  renderAnimalsList();
+  renderGroupsList();
+  renderDiasList();
+  renderFotoDiasList();
+  renderFilterBar();
+  renderHistory();
+  updateDrivePath();
+
+  document.getElementById('sheetsUrl').addEventListener('change', function() {
+    state.sheetsUrl = this.value.trim();
+    saveState();
+  });
+  document.getElementById('pastaRaiz').addEventListener('change', function() {
+    state.pastaRaiz = this.value.trim() || 'Doutorado';
+    saveState();
+    updateDrivePath();
+  });
+  document.getElementById('lengthInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') onLengthChange();
+  });
+})();
+
+function saveState() {
+  const toSave = { records: state.records, groups: state.groups,
+                   dias: state.dias, animals: state.animals,
+                   fotoDias: state.fotoDias, sheetsUrl: state.sheetsUrl,
+                   pastaRaiz: state.pastaRaiz, openaiKey: state.openaiKey };
+  localStorage.setItem('ferapp_v2', JSON.stringify(toSave));
+}
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+// ═══════════════════════════════════════════════
+//  DRIVE PATH PREVIEW
+// ═══════════════════════════════════════════════
+/** Retorna o próximo número de foto para este animal+dia+grupo */
+function getNextPhotoNumber(animalId, dia, grupo) {
+  const count = state.records.filter(r =>
+    r.animalId === animalId &&
+    String(r.dia) === String(dia) &&
+    r.group === grupo
+  ).length;
+  return count + 1;
+}
+
+function buildFileName(fotoDiaOverride) {
+  const id      = document.getElementById('animalId').value || 'Animal_??';
+  const grupo   = document.getElementById('groupSelect').value;
+  const dia     = document.getElementById('diaSelect').value;
+  const fotoDia = fotoDiaOverride || document.getElementById('fotoDiaSelect').value || 'FotoDia??';
+  const diaFmt  = dia   ? `Dia${String(dia).padStart(2,'0')}` : 'Dia??';
+  const trat    = grupo ? grupo.replace(/\s+/g,'_') : '??';
+  // Remove caracteres inválidos para nome de arquivo (parênteses são ok, mas espaços viram _)
+  const fotoDiaSafe = fotoDia.replace(/\s+/g, '_');
+  return `${id}_${diaFmt}_Trat_${trat}_${fotoDiaSafe}.jpg`;
+}
+
+function buildFolderPath() {
+  const raiz   = state.pastaRaiz || 'Doutorado';
+  const grupo  = document.getElementById('groupSelect').value || '??';
+  const dia    = document.getElementById('diaSelect').value;
+  const animal = document.getElementById('animalId').value.trim() || '??';
+  const diaFmt = dia ? `Dia ${String(dia).padStart(2,'0')}` : 'Dia ??';
+  return `${raiz} / Experimentação animal / ${diaFmt} / Grupo ${grupo} / ${animal}`;
+}
+
+function updateDrivePath() {
+  const id    = document.getElementById('animalId').value;
+  const grupo = document.getElementById('groupSelect').value;
+  const dia   = document.getElementById('diaSelect').value;
+
+  const box = document.getElementById('drivePath');
+  if (!id && !grupo && !dia) { box.classList.remove('show'); return; }
+  box.classList.add('show');
+  document.getElementById('pathText').textContent    = buildFolderPath();
+  document.getElementById('fileNameText').textContent = buildFileName();
+}
+
+// ═══════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════
+function showTab(tab) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + tab).classList.add('active');
+  document.getElementById('btn-'    + tab).classList.add('active');
+  if (tab === 'historico') renderHistory();
+}
+
+// ═══════════════════════════════════════════════
+//  SELECTS
+// ═══════════════════════════════════════════════
+function renderAnimalSelect() {
+  const sel = document.getElementById('animalId');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
+    state.animals.map(a => `<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
+}
+
+function renderFotoDiaSelect() {
+  const sel = document.getElementById('fotoDiaSelect');
+  const cur = sel.value;
+  // Fotos regulares (exclui "Eutanásia" caso alguém tenha adicionado manualmente)
+  const regulares = state.fotoDias.filter(f => !f.toLowerCase().includes('eutan'));
+  sel.innerHTML =
+    '<option value="">— Dia da Foto —</option>' +
+    regulares.map(f => `<option value="${f}"${f===cur?' selected':''}>${f}</option>`).join('') +
+    '<option disabled>──────────────</option>' +
+    `<option value="Eutanásia"${cur==='Eutanásia'?' selected':''}>🔴 Eutanásia</option>`;
+}
+
+function renderGroupSelect() {
+  const sel = document.getElementById('groupSelect');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Selecione —</option>' +
+    state.groups.map(g => `<option value="${g}"${g===cur?' selected':''}>${g}</option>`).join('');
+}
+
+function renderDiaSelect() {
+  const sel = document.getElementById('diaSelect');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Dia —</option>' +
+    state.dias.sort((a,b)=>a-b).map(d =>
+      `<option value="${d}"${String(d)===cur?' selected':''}>Dia ${String(d).padStart(2,'0')}</option>`
+    ).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  PHOTO
+// ═══════════════════════════════════════════════
+document.getElementById('photoInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.currentPhoto   = ev.target.result;
+    state.analysisResult = null;
+    state.aiResult       = null;
+    const prev = document.getElementById('photoPreview');
+    prev.src = ev.target.result;
+    prev.style.display = 'block';
+    document.getElementById('photoArea').style.minHeight = '220px';
+    document.getElementById('btnAnalyze').style.display  = 'flex';
+    document.getElementById('btnAI').style.display       = 'flex';
+    document.getElementById('resultBox').classList.remove('show');
+    document.getElementById('aiResultBox').classList.remove('show');
+  };
+  reader.readAsDataURL(file);
+});
+
+// Toque na foto abre zoom; toque na área vazia abre câmera
+function photoAreaClick(e) {
+  if (state.currentPhoto && e.target.id === 'photoPreview') {
+    openZoom();
+  } else if (e.target.id !== 'photoPreview') {
+    document.getElementById('photoInput').click();
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ZOOM
+// ═══════════════════════════════════════════════
+function openZoom() {
+  if (!state.currentPhoto) return;
+  document.getElementById('zoomImg').src = state.currentPhoto;
+  document.getElementById('zoomOverlay').classList.add('open');
+}
+function closeZoom() {
+  document.getElementById('zoomOverlay').classList.remove('open');
+}
+// Fechar zoom com a tecla ESC (desktop/teclado físico)
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
+
+// ═══════════════════════════════════════════════
+//  ANÁLISE CLÍNICA COM IA (OpenAI GPT-4o)
+// ═══════════════════════════════════════════════
+async function analyzeWithAI() {
+  if (!state.currentPhoto) { showToast('⚠ Tire uma foto primeiro'); return; }
+  if (!state.openaiKey)    { showToast('⚠ Configure a chave OpenAI na aba Config'); return; }
+
+  const btn = document.getElementById('btnAI');
+  btn.textContent = '⏳ Analisando...';
+  btn.disabled    = true;
+
+  try {
+    const base64 = state.currentPhoto.replace(/^data:image\/\w+;base64,/, '');
+
+    const prompt = `Você é um especialista em cicatrização de feridas em ratos de laboratório.
+Analise esta imagem de ferida cutânea e avalie CADA parâmetro clínico de 0 a 5:
+
+• Hiperemia (vermelhidão/edema): 0=ausente, 1=mínima, 2=leve, 3=moderada, 4=acentuada, 5=intensa/extensa
+• Crosta: 0=ausente, 1=mínima, 2=leve, 3=moderada, 4=extensa, 5=crosta densa cobrindo toda a ferida
+• Tecido necrótico: 0=ausente, 1=traços (<10%), 2=leve (10-25%), 3=moderado (25-50%), 4=extenso (50-75%), 5=dominante (>75%)
+• Granulação: 0=ausente, 1=inicial (<10%), 2=parcial (10-25%), 3=moderada (25-50%), 4=avançada (50-75%), 5=completa (>75%)
+• Tecido cicatricial: 0=ausente, 1=inicial, 2=leve, 3=moderado, 4=avançado, 5=completo/epitelizado
+
+Responda APENAS em JSON válido, sem texto adicional:
+{
+  "hiperemia": <0-5>,
+  "crosta": <0-5>,
+  "necrose": <0-5>,
+  "granulacao": <0-5>,
+  "cicatricial": <0-5>,
+  "observacoes": "<frase curta sobre o estado geral da ferida>"
+}`;
+
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + state.openaiKey
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + base64, detail: 'high' } }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(()=>({}));
+      throw new Error((err.error && err.error.message) || 'HTTP ' + resp.status);
+    }
+
+    const data = await resp.json();
+    const text = data.choices[0].message.content.trim();
+
+    // Extrai JSON mesmo se vier com markdown code fences
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Resposta inesperada da IA');
+
+    const ai = JSON.parse(jsonMatch[0]);
+    state.aiResult = ai;
+
+    renderAIResult(ai);
+    showToast('✔ Análise IA concluída!');
+
+  } catch(err) {
+    showToast('⚠ IA: ' + err.message);
+    console.error(err);
+  } finally {
+    btn.textContent = '🤖 Análise Clínica com IA';
+    btn.disabled    = false;
+  }
+}
+
+function renderAIResult(ai) {
+  const params = [
+    { key: 'hiperemia',   label: 'Hiperemia'           },
+    { key: 'crosta',      label: 'Crosta'               },
+    { key: 'necrose',     label: 'Tecido necrótico'     },
+    { key: 'granulacao',  label: 'Granulação'           },
+    { key: 'cicatricial', label: 'Tec. cicatricial'     },
+  ];
+
+  document.getElementById('aiParamsContainer').innerHTML = params.map(p => {
+    const score = ai[p.key] ?? '-';
+    const pct   = typeof score === 'number' ? (score / 5) * 100 : 0;
+    return `<div class="ai-param-row">
+      <span class="ai-param-label">${p.label}</span>
+      <span class="ai-param-score">${score}/5</span>
+      <div class="ai-param-bar"><div class="ai-param-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('aiObs').textContent = ai.observacoes || '';
+  document.getElementById('aiResultBox').classList.add('show');
+}
+
+// ═══════════════════════════════════════════════
+//  ANALYSIS MODAL — DOIS TRAÇADOS + COMPRIMENTO + AUTO
+// ═══════════════════════════════════════════════
+let analysisCtx, originalImageData;
+let currentMode  = 'dual';   // 'dual' | 'single' | 'auto'
+let activeTrace  = 'ref';    // 'ref' | 'wound'  (modo dual)
+let refPoints    = [];       // traçado da referência (🟡 amarelo)
+let woundPoints  = [];       // traçado da ferida     (🔴 vermelho/verde)
+let tracePoints  = [];       // traçado único          (modo single)
+let isDrawing    = false;
+let eraserActive = false;    // borracha ativa no modo auto
+let drawingListenersAdded = false;
+let canvasZoom   = 1.0;      // zoom atual do canvas (1 a 4)
+let pinchStartDist= null;    // distância inicial do gesto pinch
+let pinchStartZoom= 1.0;     // zoom no início do pinch
+
+// ── Zoom do canvas ────────────────────────────────
+function adjustZoom(delta, reset) {
+  if (reset) { canvasZoom = 1.0; }
+  else        { canvasZoom = Math.max(1, Math.min(4, canvasZoom + delta)); }
+  applyCanvasZoom();
+}
+
+function applyCanvasZoom() {
+  const canvas = document.getElementById('analysisCanvas');
+  const wrap   = document.getElementById('canvasZoomWrap');
+  if (!canvas.width) return;
+  const w = canvas.width  * canvasZoom;
+  const h = canvas.height * canvasZoom;
+  canvas.style.width  = w + 'px';
+  canvas.style.height = h + 'px';
+  wrap.style.width    = w + 'px';
+  wrap.style.height   = h + 'px';
+  document.getElementById('zoomLabel').textContent =
+    canvasZoom === Math.floor(canvasZoom) ? canvasZoom + '×' : canvasZoom.toFixed(1) + '×';
+}
+
+// ── Abertura do modal ─────────────────────────
+function openAnalysisModal() {
+  if (!state.currentPhoto) return;
+  document.getElementById('analysisModal').classList.add('open');
+  document.getElementById('modalResult').classList.remove('show');
+  window._areaResult      = null;
+  window._detectionResult = null;
+  window._traceResult     = null;
+  refPoints = []; woundPoints = []; tracePoints = [];
+
+  // Resetar zoom ao abrir
+  canvasZoom = 1.0;
+
+  const img = new Image();
+  img.onload = function() {
+    const canvas   = document.getElementById('analysisCanvas');
+    const scrollWrap = document.getElementById('canvasWrap');
+    const maxW   = scrollWrap.clientWidth;
+    const maxH   = scrollWrap.clientHeight;
+    const scale  = Math.min(maxW / img.width, maxH / img.height, 1);
+    canvas.width  = Math.floor(img.width  * scale);
+    canvas.height = Math.floor(img.height * scale);
+    analysisCtx = canvas.getContext('2d', { willReadFrequently: true });
+    analysisCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    originalImageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
+    applyCanvasZoom(); // aplica zoom=1 inicial (limpa estilos)
+
+    if (!drawingListenersAdded) { initDrawingListeners(); drawingListenersAdded = true; }
+    setMode('dual');
+  };
+  img.src = state.currentPhoto;
+}
+
+function closeAnalysisModal() {
+  document.getElementById('analysisModal').classList.remove('open');
+}
+
+// ── Troca de modo ─────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  ['Dual','Single','Auto'].forEach(m => {
+    const id = m.toLowerCase();
+    document.getElementById('tab' + m).classList.toggle('active', id === mode);
+    document.getElementById('ctrl'+ m).style.display = id === mode ? '' : 'none';
+  });
+
+  // Comprimento visível só em single e auto
+  document.getElementById('lengthRow').style.display = mode === 'dual' ? 'none' : '';
+
+  // Reseta borracha ao trocar de modo
+  eraserActive = false;
+  const btnE = document.getElementById('btnEraser');
+  if (btnE) { btnE.classList.remove('btn-eraser-on'); btnE.textContent = '🧹 Borracha'; }
+  const eraserRow = document.getElementById('eraserRow');
+  if (eraserRow) eraserRow.style.display = 'none';
+  document.getElementById('analysisCanvas').style.cursor = 'crosshair';
+
+  // Reset
+  if (originalImageData) analysisCtx.putImageData(originalImageData, 0, 0);
+  refPoints = []; woundPoints = []; tracePoints = [];
+  window._areaResult = null;
+  document.getElementById('modalResult').classList.remove('show');
+
+  if (mode === 'dual')   setActiveTrace('ref');
+  if (mode === 'single') updateHint();
+  if (mode === 'auto')   runDetection();
+}
+
+function updateHint() {
+  const map = {
+    dual_ref:   '① Desenhe o contorno do círculo de referência',
+    dual_wound: '② Agora desenhe o contorno da ferida',
+    single:     'Desenhe o contorno da ferida com o dedo',
+    auto:       'Ajuste a sensibilidade e clique em Detectar'
+  };
+  const key = currentMode === 'dual' ? 'dual_' + activeTrace : currentMode;
+  document.getElementById('traceHint').textContent = map[key] || '';
+}
+
+// ── Selecionar traçado ativo (modo dual) ──────
+function setActiveTrace(trace) {
+  activeTrace = trace;
+  const refBtn   = document.getElementById('stepRef');
+  const woundBtn = document.getElementById('stepWound');
+
+  refBtn.className   = 'step-btn' + (trace === 'ref'   ? ' ref-active'   : (refPoints.length   >= 6 ? ' step-done' : ''));
+  woundBtn.className = 'step-btn' + (trace === 'wound' ? ' wound-active' : (woundPoints.length >= 6 ? ' step-done' : ''));
+
+  updateHint();
+}
+
+// ── Limpar traçados ────────────────────────────
+function clearRef() {
+  refPoints = [];
+  window._areaResult = null;
+  redrawAllTraces();
+  document.getElementById('modalResult').classList.remove('show');
+  setActiveTrace('ref');
+}
+
+function clearWound() {
+  woundPoints = [];
+  window._areaResult = null;
+  redrawAllTraces();
+  document.getElementById('modalResult').classList.remove('show');
+  setActiveTrace('wound');
+}
+
+function clearTrace() {  // single mode
+  tracePoints = [];
+  window._traceResult = null;
+  window._areaResult  = null;
+  if (originalImageData) analysisCtx.putImageData(originalImageData, 0, 0);
+  document.getElementById('modalResult').classList.remove('show');
+}
+
+// ── Desfazer último ponto ─────────────────────
+function undoLastPoint() {
+  if (currentMode === 'dual') {
+    const pts = activeTrace === 'ref' ? refPoints : woundPoints;
+    if (pts.length > 1) { pts.pop(); redrawAllTraces(); }
+  } else {
+    if (tracePoints.length > 1) { tracePoints.pop(); redrawTrace(false); }
+  }
+}
+
+// ══════════════════════════════════════════════
+//  LISTENERS DE DESENHO (touch + mouse)
+// ══════════════════════════════════════════════
+function initDrawingListeners() {
+  const canvas = document.getElementById('analysisCanvas');
+
+  function coords(clientX, clientY) {
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  }
+
+  function getActivePts() {
+    if (currentMode === 'dual')   return activeTrace === 'ref' ? refPoints : woundPoints;
+    if (currentMode === 'single') return tracePoints;
+    return null; // auto: sem desenho no canvas
+  }
+
+  function onStart(cx, cy) {
+    const c = coords(cx, cy);
+    if (currentMode === 'auto' && eraserActive) {
+      isDrawing = true;
+      eraseAt(c.x, c.y);
+      return;
+    }
+    const pts = getActivePts(); if (!pts) return;
+    pts.length = 0;
+    pts.push(c);
+    isDrawing = true;
+    window._areaResult = null;
+    document.getElementById('modalResult').classList.remove('show');
+  }
+
+  function onMove(cx, cy) {
+    const c = coords(cx, cy);
+    if (currentMode === 'auto' && eraserActive) {
+      if (isDrawing) eraseAt(c.x, c.y);
+      return;
+    }
+    const pts = getActivePts(); if (!pts || !isDrawing) return;
+    pts.push(c);
+    if (currentMode === 'dual')   redrawAllTraces();
+    if (currentMode === 'single') redrawTrace(false);
+  }
+
+  function onEnd() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    if (currentMode === 'auto' && eraserActive) return; // já processado em tempo real
+    if (currentMode === 'dual')   finalizeDualTrace();
+    if (currentMode === 'single') finalizeTrace();
+  }
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      // Pinch — início
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStartDist = Math.hypot(dx, dy);
+      pinchStartZoom = canvasZoom;
+      isDrawing = false; // cancela traçado se havia começado
+      return;
+    }
+    if (e.touches[0]) onStart(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:false });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2 && pinchStartDist) {
+      // Pinch — movimento
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      canvasZoom = Math.max(1, Math.min(4, pinchStartZoom * (dist / pinchStartDist)));
+      applyCanvasZoom();
+      return;
+    }
+    if (e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:false });
+
+  canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (e.touches.length < 2) pinchStartDist = null;
+    if (e.touches.length === 0) onEnd();
+  }, { passive:false });
+
+  canvas.addEventListener('mousedown',  e => onStart(e.clientX, e.clientY));
+  canvas.addEventListener('mousemove',  e => { if(isDrawing) onMove(e.clientX, e.clientY); });
+  canvas.addEventListener('mouseup',    () => onEnd());
+}
+
+// ══════════════════════════════════════════════
+//  MODO DUAL — REFERÊNCIA 🟡 + FERIDA 🔴
+// ══════════════════════════════════════════════
+
+/** Redesenha ambos os traçados no canvas */
+function redrawAllTraces() {
+  if (!originalImageData) return;
+  analysisCtx.putImageData(originalImageData, 0, 0);
+
+  // Referência — contorno amarelo
+  if (refPoints.length >= 2) {
+    analysisCtx.beginPath();
+    analysisCtx.moveTo(refPoints[0].x, refPoints[0].y);
+    for (let i = 1; i < refPoints.length; i++) analysisCtx.lineTo(refPoints[i].x, refPoints[i].y);
+    analysisCtx.closePath();
+    analysisCtx.strokeStyle = '#F59E0B';
+    analysisCtx.lineWidth   = 2.5;
+    analysisCtx.lineJoin    = 'round';
+    analysisCtx.stroke();
+  }
+
+  // Ferida — preenchimento vermelho + contorno verde
+  if (woundPoints.length >= 2) {
+    analysisCtx.beginPath();
+    analysisCtx.moveTo(woundPoints[0].x, woundPoints[0].y);
+    for (let i = 1; i < woundPoints.length; i++) analysisCtx.lineTo(woundPoints[i].x, woundPoints[i].y);
+    analysisCtx.closePath();
+    analysisCtx.fillStyle   = 'rgba(239,68,68,0.32)';
+    analysisCtx.fill();
+    analysisCtx.strokeStyle = '#4ADE80';
+    analysisCtx.lineWidth   = 2.5;
+    analysisCtx.lineJoin    = 'round';
+    analysisCtx.stroke();
+  }
+}
+
+/** Finaliza o traçado ativo no modo dual */
+function finalizeDualTrace() {
+  const pts = activeTrace === 'ref' ? refPoints : woundPoints;
+  if (pts.length < 6) { showModalResult(null, 'Traçado muito curto. Tente novamente.'); return; }
+
+  const simplified = simplifyPoints(pts, 2);
+  if (activeTrace === 'ref') refPoints = simplified;
+  else                       woundPoints = simplified;
+
+  redrawAllTraces();
+
+  if (activeTrace === 'ref') {
+    // Avança automaticamente para o traçado da ferida
+    setActiveTrace('wound');
+    showModalResult(null, '🟡 Referência OK! Agora trace a ferida');
+  } else {
+    // Ambos traçados — calcula área
+    tryCalculateDual();
+  }
+}
+
+/** Calcula a área quando referência + ferida estão traçadas */
+function tryCalculateDual() {
+  if (refPoints.length < 6 || woundPoints.length < 6) {
+    showModalResult(null, 'Trace a referência e a ferida para calcular.');
+    return;
+  }
+
+  const refSizeMm = parseFloat(document.getElementById('refSizeInput').value) || 10;
+
+  // Bounding box da referência → diâmetro em pixels
+  let rMinX=Infinity, rMaxX=-Infinity, rMinY=Infinity, rMaxY=-Infinity;
+  for (const p of refPoints) {
+    if(p.x<rMinX)rMinX=p.x; if(p.x>rMaxX)rMaxX=p.x;
+    if(p.y<rMinY)rMinY=p.y; if(p.y>rMaxY)rMaxY=p.y;
+  }
+  // Média dos eixos X e Y (compensa traçado levemente elíptico)
+  const refPxDiam = ((rMaxX - rMinX) + (rMaxY - rMinY)) / 2;
+
+  if (refPxDiam < 5) { showModalResult(null, 'Referência muito pequena no traçado.'); return; }
+
+  const scaleMmPx = refSizeMm / refPxDiam; // mm por pixel
+
+  // Área da ferida via Shoelace
+  const woundPxArea = shoelaceArea(woundPoints);
+
+  // Bounding box da ferida
+  let wMinX=Infinity, wMaxX=-Infinity, wMinY=Infinity, wMaxY=-Infinity;
+  for (const p of woundPoints) {
+    if(p.x<wMinX)wMinX=p.x; if(p.x>wMaxX)wMaxX=p.x;
+    if(p.y<wMinY)wMinY=p.y; if(p.y>wMaxY)wMaxY=p.y;
+  }
+  const widthMm  = (wMaxX - wMinX) * scaleMmPx;
+  const heightMm = (wMaxY - wMinY) * scaleMmPx;
+  const areaMm2  = woundPxArea * scaleMmPx * scaleMmPx;
+
+  window._areaResult = {
+    areaMm2, lengthMm: refSizeMm,
+    widthMm, heightMm,
+    pixelCount: Math.round(woundPxArea),
+    method: 'dual'
+  };
+
+  showModalResult(areaMm2,
+    `🟡 Escala: ${scaleMmPx.toFixed(4)} mm/px | 🔴 ${widthMm.toFixed(2)} × ${heightMm.toFixed(2)} mm`
+  );
+}
+
+// ══════════════════════════════════════════════
+//  MODO SINGLE — TRAÇADO ÚNICO + COMPRIMENTO
+// ══════════════════════════════════════════════
+
+/** Redesenha traçado simples */
+function redrawTrace(closed) {
+  if (!originalImageData || tracePoints.length < 2) return;
+  analysisCtx.putImageData(originalImageData, 0, 0);
+
+  analysisCtx.beginPath();
+  analysisCtx.moveTo(tracePoints[0].x, tracePoints[0].y);
+  for (let i = 1; i < tracePoints.length; i++) analysisCtx.lineTo(tracePoints[i].x, tracePoints[i].y);
+  if (closed) analysisCtx.closePath();
+
+  if (closed) { analysisCtx.fillStyle = 'rgba(239,68,68,0.35)'; analysisCtx.fill(); }
+  analysisCtx.strokeStyle = '#4ADE80';
+  analysisCtx.lineWidth   = 2.5;
+  analysisCtx.lineJoin    = 'round';
+  analysisCtx.lineCap     = 'round';
+  analysisCtx.stroke();
+}
+
+function finalizeTrace() {
+  if (tracePoints.length < 6) { showModalResult(null, 'Traçado muito curto. Tente novamente.'); return; }
+
+  tracePoints = simplifyPoints(tracePoints, 2);
+  redrawTrace(true);
+
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  for (const p of tracePoints) {
+    if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x;
+    if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y;
+  }
+  const pixelArea = shoelaceArea(tracePoints);
+  window._traceResult = { pixelArea, bounds: { minX, maxX, minY, maxY } };
+
+  const len = parseFloat(document.getElementById('lengthInput').value);
+  if (len > 0) calculateAreaFromTrace(len);
+  else showModalResult(null, 'Traçado concluído! Informe o comprimento em mm.');
+}
+
+/** Remove pontos muito próximos do traçado (ruído de toque) */
+function simplifyPoints(pts, minDist) {
+  if (pts.length < 2) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const last = out[out.length - 1];
+    const dx = pts[i].x - last.x, dy = pts[i].y - last.y;
+    if (Math.sqrt(dx*dx + dy*dy) >= minDist) out.push(pts[i]);
+  }
+  return out;
+}
+
+/** Área de polígono pelo método do sapateiro (Shoelace / Gauss) — em px² */
+function shoelaceArea(pts) {
+  let area = 0;
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += pts[i].x * pts[j].y;
+    area -= pts[j].x * pts[i].y;
+  }
+  return Math.abs(area) / 2;
+}
+
+function calculateAreaFromTrace(lengthMm) {
+  const trace = window._traceResult;
+  if (!trace) { showModalResult(null, 'Trace a ferida primeiro.'); return; }
+
+  const pixelLength = Math.max(trace.bounds.maxX - trace.bounds.minX, trace.bounds.maxY - trace.bounds.minY);
+  if (pixelLength < 4) { showModalResult(null, 'Traçado muito pequeno.'); return; }
+
+  const scale    = lengthMm / pixelLength;
+  const areaMm2  = trace.pixelArea * scale * scale;
+  const widthMm  = (trace.bounds.maxX - trace.bounds.minX) * scale;
+  const heightMm = (trace.bounds.maxY - trace.bounds.minY) * scale;
+
+  window._areaResult = { areaMm2, lengthMm, pixelCount: Math.round(trace.pixelArea), widthMm, heightMm, method: 'manual' };
+  showModalResult(areaMm2,
+    `✏️ Traçado manual | ${Math.round(trace.pixelArea).toLocaleString()} px² | ` +
+    `${widthMm.toFixed(2)} × ${heightMm.toFixed(2)} mm`
+  );
+}
+
+/** Chamado ao digitar comprimento */
+function onLengthChange() {
+  const len = parseFloat(document.getElementById('lengthInput').value);
+  if (!len || len <= 0) return;
+  if (currentMode === 'single' && window._traceResult)     calculateAreaFromTrace(len);
+  if (currentMode === 'auto'   && window._detectionResult) calculateAreaAuto(len);
+}
+
+// ══════════════════════════════════════════════
+//  MODO 2 — DETECÇÃO AUTOMÁTICA (HSV)
+// ══════════════════════════════════════════════
+
+function onSliderChange(el) {
+  document.getElementById('sensitivityVal').textContent = el.value + '%';
+}
+
+function runDetection() {
+  if (!originalImageData) return;
+  // Reseta borracha ao detectar novamente
+  eraserActive = false;
+  const btnE = document.getElementById('btnEraser');
+  if (btnE) { btnE.classList.remove('btn-eraser-on'); btnE.textContent = '🧹 Borracha'; }
+  const eraserRow = document.getElementById('eraserRow');
+  if (eraserRow) eraserRow.style.display = 'none';
+  document.getElementById('analysisCanvas').style.cursor = 'crosshair';
+
+  const sensitivity = parseInt(document.getElementById('sensitivitySlider').value);
+  const canvas = document.getElementById('analysisCanvas');
+
+  analysisCtx.putImageData(originalImageData, 0, 0);
+  const imageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
+  const result    = detectWound(imageData, sensitivity);
+
+  window._detectionResult = result;
+  redrawAutoOverlay();
+
+  const len = parseFloat(document.getElementById('lengthInput').value);
+  if (len > 0) calculateAreaAuto(len);
+}
+
+/** Redesenha o overlay vermelho semi-transparente da detecção automática */
+function redrawAutoOverlay() {
+  const canvas = document.getElementById('analysisCanvas');
+  const result = window._detectionResult;
+  if (!originalImageData) return;
+
+  // Restaura imagem original
+  analysisCtx.putImageData(originalImageData, 0, 0);
+  if (!result || result.woundIndices.length === 0) return;
+
+  // Cria máscara vermelha semi-transparente num canvas temporário
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const tc = tmp.getContext('2d');
+  const id = tc.createImageData(canvas.width, canvas.height);
+  for (const idx of result.woundIndices) {
+    const px = idx * 4;
+    id.data[px]   = 239; // R
+    id.data[px+1] = 68;  // G
+    id.data[px+2] = 68;  // B
+    id.data[px+3] = 150; // A — ~59% opacidade, mostra imagem abaixo
+  }
+  tc.putImageData(id, 0, 0);
+
+  // Compõe sobre a imagem original
+  analysisCtx.drawImage(tmp, 0, 0);
+
+  // Bounding box verde
+  const b = result.bounds;
+  analysisCtx.strokeStyle = '#4ADE80';
+  analysisCtx.lineWidth   = 2;
+  analysisCtx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
+}
+
+/** Liga/desliga a borracha */
+function toggleEraser() {
+  eraserActive = !eraserActive;
+  const btn = document.getElementById('btnEraser');
+  btn.classList.toggle('btn-eraser-on', eraserActive);
+  btn.textContent = eraserActive ? '✏️ Desenhar' : '🧹 Borracha';
+  document.getElementById('eraserRow').style.display = eraserActive ? '' : 'none';
+  document.getElementById('analysisCanvas').style.cursor = eraserActive ? 'cell' : 'crosshair';
+}
+
+/** Apaga pixels detectados num raio em torno do ponto tocado */
+function eraseAt(cx, cy) {
+  const result = window._detectionResult;
+  if (!result || result.woundIndices.length === 0) return;
+
+  const canvas = document.getElementById('analysisCanvas');
+  const r  = parseInt(document.getElementById('eraserSize').value) || 20;
+  const r2 = r * r;
+  const W  = canvas.width;
+
+  result.woundIndices = result.woundIndices.filter(idx => {
+    const px = idx % W, py = Math.floor(idx / W);
+    const dx = px - cx, dy = py - cy;
+    return dx * dx + dy * dy > r2;
+  });
+
+  // Atualiza bounding box
+  if (result.woundIndices.length > 0) {
+    let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    for (const i of result.woundIndices) {
+      const px = i % W, py = Math.floor(i / W);
+      if(px<minX)minX=px; if(px>maxX)maxX=px;
+      if(py<minY)minY=py; if(py>maxY)maxY=py;
+    }
+    result.bounds = { minX, maxX, minY, maxY };
+  } else {
+    result.bounds = { minX:0, maxX:0, minY:0, maxY:0 };
+  }
+
+  redrawAutoOverlay();
+
+  // Desenha o círculo da borracha como guia visual
+  analysisCtx.beginPath();
+  analysisCtx.arc(cx, cy, r, 0, Math.PI * 2);
+  analysisCtx.strokeStyle = 'rgba(255,255,255,0.8)';
+  analysisCtx.lineWidth   = 1.5;
+  analysisCtx.stroke();
+
+  // Recalcula área em tempo real se comprimento já preenchido
+  const len = parseFloat(document.getElementById('lengthInput').value);
+  if (len > 0 && result.woundIndices.length > 0) calculateAreaAuto(len);
+  else if (result.woundIndices.length === 0) {
+    showModalResult(null, 'Área zerada. Clique em 🔄 Detectar para recomeçar.');
+  }
+}
+
+function calculateAreaAuto(lengthMm) {
+  const result = window._detectionResult;
+  if (!result || result.woundIndices.length === 0) {
+    showModalResult(null, 'Nenhuma ferida detectada. Ajuste a sensibilidade ou use o Traçado Manual.');
+    return;
+  }
+  if (!lengthMm || lengthMm <= 0) {
+    showModalResult(null, 'Informe o comprimento da ferida em mm.');
+    return;
+  }
+  const { bounds } = result;
+  const pixelLength = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+  if (pixelLength < 5) { showModalResult(null, 'Área detectada muito pequena.'); return; }
+
+  const scale    = lengthMm / pixelLength;
+  const areaMm2  = result.woundIndices.length * scale * scale;
+  const widthMm  = (bounds.maxX - bounds.minX) * scale;
+  const heightMm = (bounds.maxY - bounds.minY) * scale;
+
+  window._areaResult = { areaMm2, lengthMm, pixelCount: result.woundIndices.length, widthMm, heightMm, method: 'auto' };
+  showModalResult(areaMm2,
+    `🔬 Detecção auto | ${result.woundIndices.length.toLocaleString()} px | ` +
+    `${widthMm.toFixed(2)} × ${heightMm.toFixed(2)} mm`
+  );
+}
+
+// ── Resultado + Confirmar ─────────────────────
+function showModalResult(area, detail) {
+  const box = document.getElementById('modalResult');
+  box.classList.add('show');
+  if (area != null) {
+    document.getElementById('modalAreaVal').innerHTML     = `${area.toFixed(4)} <span>mm²</span>`;
+    document.getElementById('modalAreaDetail').textContent = detail;
+  } else {
+    document.getElementById('modalAreaVal').innerHTML     = `<span style="color:#EF4444">⚠ ${detail}</span>`;
+    document.getElementById('modalAreaDetail').textContent = '';
+  }
+}
+
+function confirmAnalysis() {
+  if (!window._areaResult) {
+    showToast('⚠ Trace ou detecte a ferida e informe o comprimento');
+    return;
+  }
+  state.analysisResult = window._areaResult;
+
+  const box = document.getElementById('resultBox');
+  box.classList.add('show');
+  document.getElementById('resultArea').innerHTML =
+    `${window._areaResult.areaMm2.toFixed(4)} <span>mm²</span>`;
+  const methodMap = { dual: '🟡🔴 Ref+Ferida', manual: '✏️ Manual', auto: '🔬 Auto' };
+  const met = methodMap[window._areaResult.method] || window._areaResult.method;
+  document.getElementById('resultDetails').textContent =
+    `${met} | Ref: ${window._areaResult.lengthMm} mm | ${window._areaResult.widthMm.toFixed(2)} × ${window._areaResult.heightMm.toFixed(2)} mm`;
+
+  closeAnalysisModal();
+  showToast('✔ Área registrada: ' + window._areaResult.areaMm2.toFixed(4) + ' mm²');
+}
+
+// ═══════════════════════════════════════════════
+//  WOUND DETECTION  —  HSV + Maior Componente Conectada
+//
+//  Por que HSV?
+//  O pelo branco do rato tem saturação ≈ 0.
+//  A ferida (centro vermelho + borda marrom/crosta) tem saturação alta.
+//  Basta filtrar por matiz vermelho/marrom E saturação > limiar.
+//  A componente conectada mais GRANDE = a ferida principal.
+// ═══════════════════════════════════════════════
+
+/** Converte RGB (0-255) para HSV (h: 0-360, s: 0-1, v: 0-1) */
+function rgbToHsv(r, g, b) {
+  const rf = r/255, gf = g/255, bf = b/255;
+  const max = Math.max(rf,gf,bf), min = Math.min(rf,gf,bf);
+  const delta = max - min;
+  const v = max;
+  const s = max === 0 ? 0 : delta / max;
+  let h = 0;
+  if (delta > 0) {
+    if (max === rf)      h = 60 * (((gf-bf)/delta) % 6);
+    else if (max === gf) h = 60 * ((bf-rf)/delta + 2);
+    else                 h = 60 * ((rf-gf)/delta + 4);
+    if (h < 0) h += 360;
+  }
+  return { h, s, v };
+}
+
+/**
+ * Encontra a maior componente conectada no mask.
+ * Usa BFS com typed array queue — eficiente para imagens de até ~4 MP.
+ */
+function largestConnectedComponent(mask, width, height) {
+  const visited = new Uint8Array(width * height);
+  const queue   = new Int32Array(width * height); // fila circular
+  let   best    = [];
+
+  for (let start = 0; start < width * height; start++) {
+    if (!mask[start] || visited[start]) continue;
+
+    let head = 0, tail = 0;
+    const component = [];
+
+    queue[tail++] = start;
+    visited[start] = 1;
+
+    while (head < tail) {
+      const curr = queue[head++];
+      component.push(curr);
+      const cx = curr % width, cy = Math.floor(curr / width);
+
+      // 4-vizinhança
+      if (cx > 0          && mask[curr-1]     && !visited[curr-1])     { visited[curr-1]=1;     queue[tail++]=curr-1; }
+      if (cx < width-1    && mask[curr+1]     && !visited[curr+1])     { visited[curr+1]=1;     queue[tail++]=curr+1; }
+      if (cy > 0          && mask[curr-width] && !visited[curr-width]) { visited[curr-width]=1; queue[tail++]=curr-width; }
+      if (cy < height-1   && mask[curr+width] && !visited[curr+width]) { visited[curr+width]=1; queue[tail++]=curr+width; }
+    }
+
+    if (component.length > best.length) best = component;
+  }
+  return best;
+}
+
+function detectWound(imageData, sensitivity) {
+  const { data, width, height } = imageData;
+
+  // ── 1. Detecção HSV ────────────────────────────────────────────────
+  // sensitivity 10 → satLimiar ≈ 0.50  (rigoroso — pouca coisa passa)
+  // sensitivity 55 → satLimiar ≈ 0.28  (padrão — bom para feridas frescas)
+  // sensitivity 95 → satLimiar ≈ 0.08  (permissivo — detecta crosta seca)
+  const satLimiar = 0.60 - (sensitivity / 100) * 0.54;
+
+  const mask = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i  = y * width + x;
+      const px = i * 4;
+      const { h, s, v } = rgbToHsv(data[px], data[px+1], data[px+2]);
+
+      // Matizes da ferida: vermelho (0-40°) + marrom/laranja (até 45°)
+      // Também inclui vermelho-escuro que "wrap" perto de 360°
+      const matizFerida = (h <= 45 || h >= 315);
+
+      // Saturação alta = não é pelo branco nem fundo claro
+      // Brilho: excluímos pixel muito claro (pelo branco puro: v>0.94)
+      const isFerida = matizFerida && s > satLimiar && v < 0.93;
+
+      if (isFerida) mask[i] = 1;
+    }
+  }
+
+  // ── 2. Dilatação leve: conecta pixels próximos ──────────────────────
+  // (ajuda quando há pequenas lacunas entre centro e borda da ferida)
+  const dilated = new Uint8Array(width * height);
+  const r = 3; // raio de dilatação em pixels
+  for (let y = r; y < height - r; y++) {
+    for (let x = r; x < width - r; x++) {
+      const i = y * width + x;
+      if (mask[i]) {
+        // Marca vizinhança como "ferida dilatada"
+        for (let dy = -r; dy <= r; dy++)
+          for (let dx = -r; dx <= r; dx++)
+            dilated[(y+dy)*width+(x+dx)] = 1;
+      }
+    }
+  }
+
+  // ── 3. Maior componente conectada = a ferida principal ──────────────
+  const woundIndices = largestConnectedComponent(dilated, width, height);
+
+  if (woundIndices.length === 0)
+    return { woundIndices: [], bounds: { minX:0, maxX:0, minY:0, maxY:0 } };
+
+  // ── 4. Bounding box ─────────────────────────────────────────────────
+  let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  for (const i of woundIndices) {
+    const x = i % width, y = Math.floor(i / width);
+    if (x < minX) minX=x; if (x > maxX) maxX=x;
+    if (y < minY) minY=y; if (y > maxY) maxY=y;
+  }
+
+  return { woundIndices, bounds: { minX, maxX, minY, maxY } };
+}
+
+// ═══════════════════════════════════════════════
+//  SAVE RECORD
+// ═══════════════════════════════════════════════
+function saveRecord() {
+  const animalId = document.getElementById('animalId').value.trim();
+  const date     = document.getElementById('recordDate').value;
+  const group    = document.getElementById('groupSelect').value;
+  const dia      = document.getElementById('diaSelect').value;
+  const obs      = document.getElementById('observations').value.trim();
+
+  const fotoDia  = document.getElementById('fotoDiaSelect').value;
+
+  if (!animalId) { showToast('⚠ Selecione o Animal'); return; }
+  if (!date)     { showToast('⚠ Preencha a Data'); return; }
+  if (!group)    { showToast('⚠ Selecione o Grupo'); return; }
+  if (!dia)      { showToast('⚠ Selecione o Grupo Dia'); return; }
+  if (!fotoDia)  { showToast('⚠ Selecione o Dia da Foto'); return; }
+
+  const cleanId = animalId;
+
+  // ── Auto-sufixo para duplicatas ──────────────────────────────────────────
+  // Conta quantos registros já existem para este animal + fotoDia + dia + grupo.
+  // "FotoDia01" já existe → novo vira "FotoDia01 (2)"
+  // "FotoDia01" e "FotoDia01 (2)" existem → novo vira "FotoDia01 (3)"
+  const diaInt = parseInt(dia);
+  const copias = state.records.filter(r =>
+    r.animalId === cleanId &&
+    r.dia      === diaInt  &&
+    r.group    === group   &&
+    (r.fotoDia === fotoDia ||
+      new RegExp(`^${fotoDia.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')} \\(\\d+\\)$`)
+        .test(r.fotoDia))
+  ).length;
+
+  const fotoDiaFinal = copias === 0 ? fotoDia : `${fotoDia} (${copias + 1})`;
+
+  const fileName   = buildFileName(fotoDiaFinal);
+  const folderPath = buildFolderPath();
+  const fotoNum    = getNextPhotoNumber(cleanId, dia, group);
+
+  const record = {
+    id:           Date.now().toString(),
+    animalId:     cleanId,
+    date,
+    group,
+    dia:          diaInt,
+    fotoDia:      fotoDiaFinal,
+    fotoNum,
+    observations: obs,
+    photo:        state.currentPhoto || null,
+    analysis:     state.analysisResult || null,
+    aiResult:     state.aiResult      || null,
+    fileName,
+    folderPath,
+    synced:       false,
+    createdAt:    new Date().toISOString()
+  };
+
+  state.records.unshift(record);
+  saveState();
+
+  if (state.sheetsUrl) syncRecord(record);
+
+  resetForm();
+  showToast(copias > 0 ? `✔ Salvo como ${fotoDiaFinal}` : '✔ Registro salvo!');
+  showTab('historico');
+}
+
+function resetForm() {
+  document.getElementById('animalId').value      = '';
+  document.getElementById('fotoDiaSelect').value  = '';
+  document.getElementById('recordDate').value    = todayStr();
+  document.getElementById('groupSelect').value   = '';
+  document.getElementById('diaSelect').value     = '';
+  document.getElementById('observations').value  = '';
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoArea').style.minHeight  = '180px';
+  document.getElementById('btnAnalyze').style.display   = 'none';
+  document.getElementById('btnAI').style.display        = 'none';
+  document.getElementById('resultBox').classList.remove('show');
+  document.getElementById('aiResultBox').classList.remove('show');
+  document.getElementById('drivePath').classList.remove('show');
+  document.getElementById('photoInput').value = '';
+  state.currentPhoto   = null;
+  state.analysisResult = null;
+  state.aiResult       = null;
+  window._areaResult   = null;
+  window._detectionResult = null;
+}
+
+// ═══════════════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════════════
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  let filtered = state.records;
+  if (state.filterGroup !== 'all')
+    filtered = filtered.filter(r => r.group === state.filterGroup);
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="history-empty">
+      <span class="icon">🗂️</span>
+      <span>${state.records.length===0
+        ? 'Nenhum registro ainda.<br>Comece pela aba Registrar!'
+        : 'Nenhum registro neste grupo.'}</span></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(r => {
+    const area = r.analysis ? r.analysis.areaMm2.toFixed(4)+' mm²' : null;
+    return `
+    <div class="record-card" onclick="showRecord('${r.id}')">
+      <div class="record-thumb">
+        ${r.photo ? `<img src="${r.photo}" loading="lazy">` : '🐀'}
+      </div>
+      <div class="record-info">
+        <div class="id">${r.animalId}</div>
+        <div class="meta">${formatDate(r.date)}</div>
+        <div class="record-badges">
+          <span class="badge badge-group">${r.group}</span>
+          <span class="badge badge-dia">Dia ${String(r.dia).padStart(2,'0')}</span>
+          ${area ? `<span class="badge badge-area">📐 ${area}</span>` : ''}
+        </div>
+      </div>
+      <div class="record-sync ${r.synced?'synced':''}">
+        ${r.synced ? '☁️' : '🔄'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFilterBar() {
+  const bar = document.getElementById('filterBar');
+  bar.innerHTML = ['all', ...state.groups].map(g => `
+    <button class="filter-chip ${g===state.filterGroup?'active':''}"
+      onclick="filterRecords('${g}',this)">
+      ${g==='all'?'Todos':g}
+    </button>`).join('');
+}
+
+function filterRecords(group, el) {
+  state.filterGroup = group;
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderHistory();
+}
+
+function showRecord(id) {
+  const r = state.records.find(x => x.id === id);
+  if (!r) return;
+  const area = r.analysis ? `\nÁrea: ${r.analysis.areaMm2.toFixed(4)} mm²` : '';
+  const msg  = `${r.animalId} — ${formatDate(r.date)}\nGrupo: ${r.group} | Dia ${r.dia}${area}\n\nArquivo: ${r.fileName}\nPasta: ${r.folderPath}\n\nObs: ${r.observations||'Nenhuma'}\n\nApagar este registro?`;
+  if (confirm(msg)) {
+    state.records = state.records.filter(x => x.id !== id);
+    saveState(); renderHistory();
+    showToast('🗑 Registro apagado');
+  }
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+// ═══════════════════════════════════════════════
+//  CONFIG — OPENAI KEY
+// ═══════════════════════════════════════════════
+function saveOpenAIKey() {
+  state.openaiKey = document.getElementById('openaiKey').value.trim();
+  saveState();
+  showToast('✔ Chave salva!');
+}
+
+// ═══════════════════════════════════════════════
+//  CONFIG — FOTO DIAS
+// ═══════════════════════════════════════════════
+function renderFotoDiasList() {
+  const el = document.getElementById('fotoDiasList');
+  if (!el) return;
+  el.innerHTML = state.fotoDias.map(f => `
+    <span class="tag">${f}
+      <button class="tag-remove" onclick="removeFotoDia('${f}')">×</button>
+    </span>`).join('');
+  renderFotoDiaSelect();
+}
+
+function addFotoDia() {
+  const val = document.getElementById('newFotoDia').value.trim();
+  if (!val) return;
+  if (state.fotoDias.includes(val)) { showToast('Já existe'); return; }
+  state.fotoDias.push(val);
+  state.fotoDias.sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+  document.getElementById('newFotoDia').value = '';
+  saveState(); renderFotoDiasList();
+}
+
+function removeFotoDia(f) {
+  state.fotoDias = state.fotoDias.filter(x => x !== f);
+  saveState(); renderFotoDiasList();
+}
+
+// ═══════════════════════════════════════════════
+//  CONFIG — ANIMALS
+// ═══════════════════════════════════════════════
+function renderAnimalsList() {
+  const el = document.getElementById('animalsList');
+  if (!el) return;
+  el.innerHTML = state.animals.map(a => `
+    <span class="tag">${a}
+      <button class="tag-remove" onclick="removeAnimal('${a}')">×</button>
+    </span>`).join('');
+  renderAnimalSelect();
+}
+
+function addAnimal() {
+  const val = document.getElementById('newAnimal').value.trim();
+  if (!val) return;
+  if (state.animals.includes(val)) { showToast('Animal já existe'); return; }
+  state.animals.push(val);
+  state.animals.sort((a,b) => a.localeCompare(b, undefined, {numeric:true}));
+  document.getElementById('newAnimal').value = '';
+  saveState(); renderAnimalsList();
+}
+
+function removeAnimal(a) {
+  state.animals = state.animals.filter(x => x !== a);
+  saveState(); renderAnimalsList();
+}
+
+// ═══════════════════════════════════════════════
+//  CONFIG — GROUPS
+// ═══════════════════════════════════════════════
+function renderGroupsList() {
+  const el = document.getElementById('groupsList');
+  if (!el) return;
+  el.innerHTML = state.groups.map(g => `
+    <span class="tag">${g}
+      <button class="tag-remove" onclick="removeGroup('${g}')">×</button>
+    </span>`).join('');
+  renderGroupSelect();
+  renderFilterBar();
+}
+
+function addGroup() {
+  const val = document.getElementById('newGroup').value.trim();
+  if (!val) return;
+  if (state.groups.includes(val)) { showToast('Grupo já existe'); return; }
+  state.groups.push(val);
+  document.getElementById('newGroup').value = '';
+  saveState(); renderGroupsList();
+}
+
+function removeGroup(g) {
+  state.groups = state.groups.filter(x=>x!==g);
+  saveState(); renderGroupsList();
+}
+
+// ═══════════════════════════════════════════════
+//  CONFIG — DIAS
+// ═══════════════════════════════════════════════
+function renderDiasList() {
+  const el = document.getElementById('diasList');
+  if (!el) return;
+  el.innerHTML = state.dias.sort((a,b)=>a-b).map(d => `
+    <span class="tag">Dia ${String(d).padStart(2,'0')}
+      <button class="tag-remove" onclick="removeDia(${d})">×</button>
+    </span>`).join('');
+  renderDiaSelect();
+}
+
+function addDia() {
+  const val = parseInt(document.getElementById('newDia').value);
+  if (!val || val < 1) return;
+  if (state.dias.includes(val)) { showToast('Dia já existe'); return; }
+  state.dias.push(val);
+  document.getElementById('newDia').value = '';
+  saveState(); renderDiasList();
+}
+
+function removeDia(d) {
+  state.dias = state.dias.filter(x=>x!==d);
+  saveState(); renderDiasList();
+}
+
+// ═══════════════════════════════════════════════
+//  GOOGLE SHEETS SYNC
+// ═══════════════════════════════════════════════
+async function syncRecord(record) {
+  if (!state.sheetsUrl) return;
+  try {
+    const ai = record.aiResult || {};
+    const payload = {
+      animalId:     record.animalId,
+      date:         record.date,
+      group:        record.group,
+      dia:          record.dia,
+      fotoDia:      record.fotoDia  || '',
+      fotoNum:      record.fotoNum,
+      observations: record.observations,
+      areaMm2:      record.analysis ? record.analysis.areaMm2    : '',
+      lengthMm:     record.analysis ? record.analysis.lengthMm   : '',
+      widthMm:      record.analysis ? record.analysis.widthMm    : '',
+      pixelCount:   record.analysis ? record.analysis.pixelCount : '',
+      aiHiperemia:  ai.hiperemia   != null ? ai.hiperemia   : '',
+      aiCrosta:     ai.crosta      != null ? ai.crosta      : '',
+      aiNecrose:    ai.necrose     != null ? ai.necrose     : '',
+      aiGranulacao: ai.granulacao  != null ? ai.granulacao  : '',
+      aiCicatricial:ai.cicatricial != null ? ai.cicatricial : '',
+      aiObs:        ai.observacoes || '',
+      photoBase64:  record.photo || '',
+      fileName:     record.fileName,
+      folderPath:   record.folderPath,
+      pastaRaiz:    state.pastaRaiz || 'Doutorado',
+      recordId:     record.id,
+      timestamp:    record.createdAt
+    };
+
+    showBanner('☁️ Enviando para o Drive e Sheets...');
+    const res = await fetch(state.sheetsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json().catch(()=>({success:false}));
+    if (res.ok && json.success) {
+      record.synced = true;
+      saveState(); renderHistory();
+      showBanner('✔ Salvo no Drive e Sheets!', false, 2500);
+    } else throw new Error(json.error || 'HTTP ' + res.status);
+
+  } catch(e) {
+    showBanner('⚠ Falha: ' + e.message + ' — salvo localmente', true, 4000);
+  }
+}
+
+async function syncAllPending() {
+  const pending = state.records.filter(r => !r.synced);
+  if (!pending.length) { showToast('Nenhum registro pendente'); return; }
+  showToast(`Reenviando ${pending.length} registro(s)...`);
+  for (const r of pending) await syncRecord(r);
+}
+
+async function testSheets() {
+  const url = document.getElementById('sheetsUrl').value.trim();
+  if (!url) { showToast('Cole a URL do Apps Script primeiro'); return; }
+  showToast('Testando conexão...');
+  try {
+    const res = await fetch(url + '?test=1');
+    showToast(res.ok ? '✔ Conexão OK!' : '⚠ Erro HTTP ' + res.status);
+  } catch(e) { showToast('⚠ Não foi possível conectar'); }
+}
+
+window.addEventListener('online', syncAllPending);
+
+// ═══════════════════════════════════════════════
+//  EXPORT CSV
+// ═══════════════════════════════════════════════
+function exportCSV() {
+  if (!state.records.length) { showToast('Nenhum registro para exportar'); return; }
+  const headers = [
+    'Animal','Data','Grupo','Grupo_Dia','Dia_Foto','Nº_Foto',
+    'Área_mm2','Comprimento_mm','Largura_mm',
+    'IA_Hiperemia','IA_Crosta','IA_Necrose','IA_Granulacao','IA_Cicatricial','IA_Obs',
+    'Observações','Arquivo','Pasta_Drive','Sincronizado','Criado_em'
+  ];
+  const rows = state.records.map(r => {
+    const ai = r.aiResult || {};
+    return [
+      r.animalId, r.date, r.group, r.dia, r.fotoDia || '', r.fotoNum || '',
+      r.analysis ? r.analysis.areaMm2.toFixed(5) : '',
+      r.analysis ? r.analysis.lengthMm           : '',
+      r.analysis ? r.analysis.widthMm.toFixed(4) : '',
+      ai.hiperemia   != null ? ai.hiperemia   : '',
+      ai.crosta      != null ? ai.crosta      : '',
+      ai.necrose     != null ? ai.necrose     : '',
+      ai.granulacao  != null ? ai.granulacao  : '',
+      ai.cicatricial != null ? ai.cicatricial : '',
+      (ai.observacoes||'').replace(/,/g,';'),
+      (r.observations||'').replace(/,/g,';'),
+      r.fileName   || '',
+      r.folderPath || '',
+      r.synced ? 'Sim' : 'Não',
+      r.createdAt
+    ];
+  });
+  const csv  = [headers,...rows].map(r=>r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download=`feridas_${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast('📊 CSV exportado!');
+}
+
+function clearAll() {
+  if (!confirm('⚠️ Apagar TODOS os registros?')) return;
+  state.records = []; saveState(); renderHistory();
+  showToast('🗑 Registros apagados');
+}
+
+// ═══════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════
+let toastT;
+function showToast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2500);
+}
+let bannerT;
+function showBanner(msg, isError=false, duration=0) {
+  const el=document.getElementById('syncBanner');
+  el.textContent=msg; el.classList.toggle('error',isError); el.classList.add('show');
+  clearTimeout(bannerT);
+  if (duration>0) bannerT=setTimeout(()=>el.classList.remove('show'),duration);
+}
+</script>
+</body>
+</html>
