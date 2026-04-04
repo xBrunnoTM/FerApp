@@ -143,6 +143,7 @@
     .btn-danger   { background: var(--red-100); color: var(--red-500); border: 1.5px solid #FECACA; }
     .btn-sm       { padding: 9px 14px; font-size: 14px; border-radius: var(--radius-sm); width: auto; }
     .btn-analyze  { background: var(--blue-100); color: var(--blue-600); border: 1.5px solid #BFDBFE; margin-top: 10px; }
+    .btn-download { background: #F0FDF4; color: #166534; border: 1.5px solid #86EFAC; margin-top: 8px; font-size: 14px; }
 
     /* ── Photo ── */
     .photo-area {
@@ -577,6 +578,10 @@
       </div>
       <input type="file" id="photoInput" accept="image/*" capture="environment">
 
+      <button class="btn btn-download" id="btnDownload" style="display:none" onclick="downloadCurrentPhoto()">
+        ⬇️ Salvar Foto no Celular
+      </button>
+
       <button class="btn btn-analyze" id="btnAnalyze" style="display:none" onclick="openAnalysisModal()">
         🔬 Analisar Área da Ferida
       </button>
@@ -907,7 +912,19 @@ function saveState() {
                    dias: state.dias, animals: state.animals,
                    fotoDias: state.fotoDias, sheetsUrl: state.sheetsUrl,
                    pastaRaiz: state.pastaRaiz, openaiKey: state.openaiKey };
-  localStorage.setItem('ferapp_v2', JSON.stringify(toSave));
+  try {
+    localStorage.setItem('ferapp_v2', JSON.stringify(toSave));
+  } catch (e) {
+    // QuotaExceededError — tenta salvar sem as fotos dos registros
+    try {
+      const semFotos = { ...toSave,
+        records: toSave.records.map(r => ({ ...r, photo: null })) };
+      localStorage.setItem('ferapp_v2', JSON.stringify(semFotos));
+      console.warn('FerApp: fotos removidas do localStorage por limite de espaço.');
+    } catch (e2) {
+      console.error('FerApp: não foi possível salvar o estado local.', e2);
+    }
+  }
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -1010,25 +1027,58 @@ function renderDiaSelect() {
 // ═══════════════════════════════════════════════
 //  PHOTO
 // ═══════════════════════════════════════════════
+// ── Comprime foto para max 1200px / JPEG 0.78 ────────────────────────────
+// Reduz fotos de celular de ~5 MB para ~150-250 KB sem perder legibilidade
+function compressPhoto(dataUrl, maxPx = 900, quality = 0.80) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxPx || h > maxPx) {
+        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else        { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(cv.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl); // fallback: mantém original
+    img.src = dataUrl;
+  });
+}
+
 document.getElementById('photoInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => {
-    state.currentPhoto   = ev.target.result;
+  reader.onload = async ev => {
+    const compressed = await compressPhoto(ev.target.result);
+    state.currentPhoto   = compressed;
     state.analysisResult = null;
     state.aiResult       = null;
     const prev = document.getElementById('photoPreview');
-    prev.src = ev.target.result;
+    prev.src = compressed;
     prev.style.display = 'block';
-    document.getElementById('photoArea').style.minHeight = '220px';
-    document.getElementById('btnAnalyze').style.display  = 'flex';
-    document.getElementById('btnAI').style.display       = 'flex';
+    document.getElementById('photoArea').style.minHeight  = '220px';
+    document.getElementById('btnAnalyze').style.display   = 'flex';
+    document.getElementById('btnAI').style.display        = 'flex';
+    document.getElementById('btnDownload').style.display  = 'flex';
     document.getElementById('resultBox').classList.remove('show');
     document.getElementById('aiResultBox').classList.remove('show');
   };
   reader.readAsDataURL(file);
 });
+
+// Download da foto atual com o nome de arquivo gerado pelo formulário
+function downloadCurrentPhoto() {
+  if (!state.currentPhoto) return;
+  const name = buildFileName(); // usa os campos preenchidos no formulário
+  const a = document.createElement('a');
+  a.href     = state.currentPhoto;
+  a.download = name;
+  a.click();
+}
 
 // Toque na foto abre zoom; toque na área vazia abre câmera
 function photoAreaClick(e) {
@@ -1093,7 +1143,8 @@ Responda APENAS em JSON válido, sem texto adicional:
       },
       body: JSON.stringify({
         model: 'gpt-4o',
-        max_tokens: 300,
+        max_tokens: 400,
+        response_format: { type: 'json_object' }, // força JSON puro, sem markdown
         messages: [{
           role: 'user',
           content: [
@@ -1106,15 +1157,20 @@ Responda APENAS em JSON válido, sem texto adicional:
 
     if (!resp.ok) {
       const err = await resp.json().catch(()=>({}));
-      throw new Error((err.error && err.error.message) || 'HTTP ' + resp.status);
+      throw new Error((err.error && err.error.message) || 'Erro HTTP ' + resp.status);
     }
 
     const data = await resp.json();
-    const text = data.choices[0].message.content.trim();
+    const text = (data.choices?.[0]?.message?.content || '').trim();
 
-    // Extrai JSON mesmo se vier com markdown code fences
+    if (!text) throw new Error('IA retornou resposta vazia — verifique a chave API');
+
+    // Extrai JSON mesmo se vier com markdown code fences (fallback)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Resposta inesperada da IA');
+    if (!jsonMatch) {
+      console.error('Resposta da IA:', text);
+      throw new Error('IA não retornou JSON válido. Resposta: ' + text.slice(0, 120));
+    }
 
     const ai = JSON.parse(jsonMatch[0]);
     state.aiResult = ai;
@@ -2044,6 +2100,7 @@ function resetForm() {
   document.getElementById('photoArea').style.minHeight  = '180px';
   document.getElementById('btnAnalyze').style.display   = 'none';
   document.getElementById('btnAI').style.display        = 'none';
+  document.getElementById('btnDownload').style.display  = 'none';
   document.getElementById('resultBox').classList.remove('show');
   document.getElementById('aiResultBox').classList.remove('show');
   document.getElementById('drivePath').classList.remove('show');
@@ -2426,6 +2483,7 @@ async function syncRecord(record) {
     if (res.ok && json.success) {
       record.synced     = true;
       record.syncFailed = false;
+      record.photo      = null; // já está no Drive — libera espaço no localStorage
       saveState();
     } else {
       throw new Error(json.error || 'HTTP ' + res.status);
@@ -2435,7 +2493,8 @@ async function syncRecord(record) {
     record.synced     = false;
     record.syncFailed = true;
     saveState();
-    showBanner('⚠ Falha ao enviar — toque no registro para reenviar', true, 5000);
+    console.error('syncRecord erro:', e);
+    showBanner('⚠ Falha ao enviar (' + e.message + ') — toque no registro para reenviar', true, 7000);
   } finally {
     syncingIds.delete(record.id);
     renderHistory();
