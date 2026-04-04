@@ -7,6 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#14532D">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>FerApp</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -693,6 +695,9 @@
       <button class="btn btn-danger" onclick="syncAllPending()">
         ☁️ Reenviar Não Sincronizados
       </button>
+      <button class="btn btn-danger" style="margin-top:10px" onclick="clearSynced()">
+        ✅ Limpar Registros Sincronizados
+      </button>
       <button class="btn btn-danger" style="margin-top:10px" onclick="clearAll()">
         🗑️ Apagar Todos os Registros
       </button>
@@ -865,9 +870,83 @@ let state = {
 };
 
 // ═══════════════════════════════════════════════
+//  INDEXEDDB — armazenamento de fotos (sem limite de tamanho)
+// ═══════════════════════════════════════════════
+const photoDB = (() => {
+  let _db = null;
+  const DB_NAME = 'FerAppPhotos', STORE = 'photos', VER = 1;
+
+  function open() {
+    if (_db) return Promise.resolve(_db);
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, VER);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(STORE, { keyPath: 'id' });
+      req.onsuccess  = e => { _db = e.target.result; resolve(_db); };
+      req.onerror    = ()  => reject(req.error);
+    });
+  }
+
+  return {
+    async save(id, data) {
+      try { const db = await open();
+        await new Promise((res, rej) => {
+          const tx = db.transaction(STORE, 'readwrite');
+          tx.objectStore(STORE).put({ id, data });
+          tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+        });
+      } catch(e) { console.warn('photoDB.save:', e); }
+    },
+    async get(id) {
+      try { const db = await open();
+        return await new Promise(res => {
+          const req = db.transaction(STORE,'readonly').objectStore(STORE).get(id);
+          req.onsuccess = () => res(req.result?.data || null);
+          req.onerror   = () => res(null);
+        });
+      } catch(e) { return null; }
+    },
+    async del(id) {
+      try { const db = await open();
+        await new Promise(res => {
+          const tx = db.transaction(STORE,'readwrite');
+          tx.objectStore(STORE).delete(id);
+          tx.oncomplete = res; tx.onerror = res;
+        });
+      } catch(e) {}
+    },
+    async clear() {
+      try { const db = await open();
+        await new Promise(res => {
+          const tx = db.transaction(STORE,'readwrite');
+          tx.objectStore(STORE).clear();
+          tx.oncomplete = res; tx.onerror = res;
+        });
+      } catch(e) {}
+    }
+  };
+})();
+
+// ═══════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════
 (function init() {
+  // Solicita armazenamento persistente (PWA — evita que browser limpe os dados)
+  if (navigator.storage && navigator.storage.persist)
+    navigator.storage.persist().then(ok =>
+      console.log('FerApp: armazenamento persistente =', ok));
+
+  // Registra Service Worker (offline + cache)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('FerApp: Service Worker registrado'))
+      .catch(err => console.warn('FerApp: SW erro:', err));
+  }
+
+  // Solicita permissão para notificações (alerta de falha no sync)
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
   const saved = localStorage.getItem('ferapp_v2');
   if (saved) {
     try { Object.assign(state, JSON.parse(saved)); } catch(e) {}
@@ -1029,21 +1108,33 @@ function renderDiaSelect() {
 // ═══════════════════════════════════════════════
 // ── Comprime foto para max 1200px / JPEG 0.78 ────────────────────────────
 // Reduz fotos de celular de ~5 MB para ~150-250 KB sem perder legibilidade
-function compressPhoto(dataUrl, maxPx = 900, quality = 0.80) {
+function compressPhoto(dataUrl, maxPx = 700, quality = 0.80) {
   return new Promise(resolve => {
+    // Timeout de segurança: se onload não disparar em 8s, usa a foto original
+    const timer = setTimeout(() => resolve(dataUrl), 8000);
+
     const img = new Image();
     img.onload = () => {
-      let w = img.width, h = img.height;
-      if (w > maxPx || h > maxPx) {
-        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
-        else        { w = Math.round(w * maxPx / h); h = maxPx; }
+      clearTimeout(timer);
+      try {
+        let w = img.naturalWidth  || img.width  || maxPx;
+        let h = img.naturalHeight || img.height || maxPx;
+        if (w > maxPx || h > maxPx) {
+          if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+          else        { w = Math.round(w * maxPx / h); h = maxPx; }
+        }
+        const cv  = document.createElement('canvas');
+        cv.width  = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const result = cv.toDataURL('image/jpeg', quality);
+        resolve(result && result.length > 100 ? result : dataUrl);
+      } catch(err) {
+        resolve(dataUrl); // qualquer falha: usa original
       }
-      const cv = document.createElement('canvas');
-      cv.width = w; cv.height = h;
-      cv.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(cv.toDataURL('image/jpeg', quality));
     };
-    img.onerror = () => resolve(dataUrl); // fallback: mantém original
+    img.onerror = () => { clearTimeout(timer); resolve(dataUrl); };
     img.src = dataUrl;
   });
 }
@@ -2024,7 +2115,7 @@ function detectWound(imageData, sensitivity) {
 // ═══════════════════════════════════════════════
 //  SAVE RECORD
 // ═══════════════════════════════════════════════
-function saveRecord() {
+async function saveRecord() {
   const animalId = document.getElementById('animalId').value.trim();
   const date     = document.getElementById('recordDate').value;
   const group    = document.getElementById('groupSelect').value;
@@ -2070,7 +2161,7 @@ function saveRecord() {
     fotoDia:      fotoDiaFinal,
     fotoNum,
     observations: obs,
-    photo:        state.currentPhoto || null,
+    photo:        state.currentPhoto ? '__idb__' : null, // foto fica no IndexedDB
     analysis:     state.analysisResult || null,
     aiResult:     state.aiResult      || null,
     fileName,
@@ -2078,6 +2169,9 @@ function saveRecord() {
     synced:       false,
     createdAt:    new Date().toISOString()
   };
+
+  // Salva foto no IndexedDB (armazenamento ilimitado, fora do localStorage)
+  if (state.currentPhoto) await photoDB.save(record.id, state.currentPhoto);
 
   state.records.unshift(record);
   saveState();
@@ -2132,10 +2226,12 @@ function renderHistory() {
 
   list.innerHTML = filtered.map(r => {
     const area = r.analysis ? r.analysis.areaMm2.toFixed(4)+' mm²' : null;
+    // foto base64 antiga (compatibilidade) ou placeholder para IndexedDB
+    const thumbSrc = r.photo && r.photo !== '__idb__' ? r.photo : null;
     return `
-    <div class="record-card" onclick="showRecord('${r.id}')">
+    <div class="record-card" data-record-id="${r.id}" onclick="showRecord('${r.id}')">
       <div class="record-thumb">
-        ${r.photo ? `<img src="${r.photo}" loading="lazy">` : '🐀'}
+        ${thumbSrc ? `<img src="${thumbSrc}" loading="lazy">` : '<span class="thumb-placeholder">🐀</span>'}
       </div>
       <div class="record-info">
         <div class="id">${r.animalId}</div>
@@ -2151,6 +2247,14 @@ function renderHistory() {
       </div>
     </div>`;
   }).join('');
+
+  // Carrega miniaturas do IndexedDB em segundo plano
+  filtered.filter(r => r.photo === '__idb__').forEach(async r => {
+    const data = await photoDB.get(r.id);
+    if (!data) return;
+    const card = list.querySelector(`[data-record-id="${r.id}"] .record-thumb`);
+    if (card) card.innerHTML = `<img src="${data}" loading="lazy">`;
+  });
 }
 
 function renderFilterBar() {
@@ -2177,12 +2281,16 @@ function showRecord(id) {
   if (!r) return;
   _sheetRecordId = id;
 
-  // Foto
+  // Foto — pode estar no IndexedDB
   const photoEl = document.getElementById('rsheetPhoto');
-  if (r.photo) {
+  photoEl.innerHTML = `<div class="rsheet-photo-empty">🐀</div>`; // placeholder
+  if (r.photo === '__idb__') {
+    photoDB.get(r.id).then(data => {
+      if (data) photoEl.innerHTML =
+        `<img class="rsheet-photo" src="${data}" onclick="openZoomSrc('${data}')">`;
+    });
+  } else if (r.photo) {
     photoEl.innerHTML = `<img class="rsheet-photo" src="${r.photo}" onclick="openZoomSrc('${r.photo}')">`;
-  } else {
-    photoEl.innerHTML = `<div class="rsheet-photo-empty">🐀</div>`;
   }
 
   // Título
@@ -2286,10 +2394,11 @@ async function resyncCurrentRecord() {
   btn.disabled = false;
 }
 
-function deleteCurrentRecord() {
+async function deleteCurrentRecord() {
   const r = state.records.find(x => x.id === _sheetRecordId);
   if (!r) return;
   if (!confirm(`Apagar registro?\n${r.animalId} · ${r.fotoDia} · Dia ${r.dia}`)) return;
+  if (r.photo === '__idb__') await photoDB.del(r.id);
   state.records = state.records.filter(x => x.id !== _sheetRecordId);
   saveState();
   renderHistory();
@@ -2447,6 +2556,15 @@ async function syncRecord(record) {
 
   try {
     const ai = record.aiResult || {};
+
+    // Busca foto no IndexedDB (se armazenada lá), ou usa o campo direto (compatibilidade)
+    let photoBase64 = '';
+    if (record.photo === '__idb__') {
+      photoBase64 = (await photoDB.get(record.id)) || '';
+    } else if (record.photo && record.photo !== '__idb__') {
+      photoBase64 = record.photo;
+    }
+
     const payload = {
       animalId:     record.animalId,
       date:         record.date,
@@ -2465,7 +2583,7 @@ async function syncRecord(record) {
       aiGranulacao: ai.granulacao  != null ? ai.granulacao  : '',
       aiCicatricial:ai.cicatricial != null ? ai.cicatricial : '',
       aiObs:        ai.observacoes || '',
-      photoBase64:  record.photo || '',
+      photoBase64,
       fileName:     record.fileName,
       folderPath:   record.folderPath,
       pastaRaiz:    state.pastaRaiz || 'Doutorado',
@@ -2483,7 +2601,11 @@ async function syncRecord(record) {
     if (res.ok && json.success) {
       record.synced     = true;
       record.syncFailed = false;
-      record.photo      = null; // já está no Drive — libera espaço no localStorage
+      // Foto já está no Drive — remove do IndexedDB para liberar espaço
+      if (record.photo === '__idb__') {
+        await photoDB.del(record.id);
+        record.photo = null;
+      }
       saveState();
     } else {
       throw new Error(json.error || 'HTTP ' + res.status);
@@ -2494,7 +2616,16 @@ async function syncRecord(record) {
     record.syncFailed = true;
     saveState();
     console.error('syncRecord erro:', e);
-    showBanner('⚠ Falha ao enviar (' + e.message + ') — toque no registro para reenviar', true, 7000);
+    const msg = `Falha ao enviar ${record.animalId || 'registro'} (${e.message}) — abra o app para reenviar`;
+    showBanner('⚠ ' + msg, true, 7000);
+    // Notificação do sistema (aparece mesmo com app em segundo plano)
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('FerApp — Falha no Envio ⚠️', {
+        body: msg,
+        icon: './icon-192.png',
+        tag: 'sync-fail-' + record.id   // evita notificações duplicadas
+      });
+    }
   } finally {
     syncingIds.delete(record.id);
     renderHistory();
@@ -2521,6 +2652,13 @@ async function testSheets() {
 }
 
 window.addEventListener('online', syncAllPending);
+
+// Salva estado quando app vai para segundo plano (minimizar, trocar app, bloquear tela)
+// Crítico no mobile: o browser pode descarregar a página quando minimizada
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveState();
+});
+window.addEventListener('pagehide', saveState);   // iOS Safari (beforeunload não funciona)
 
 // ═══════════════════════════════════════════════
 //  EXPORT CSV
@@ -2562,8 +2700,25 @@ function exportCSV() {
   showToast('📊 CSV exportado!');
 }
 
-function clearAll() {
+async function clearSynced() {
+  const synced = state.records.filter(r => r.synced === true);
+  if (synced.length === 0) {
+    showToast('ℹ️ Nenhum registro sincronizado para remover');
+    return;
+  }
+  if (!confirm(`Remover ${synced.length} registro(s) já sincronizado(s) com o Drive?\nRegistros não sincronizados serão mantidos.`)) return;
+  for (const r of synced) {
+    if (r.photo === '__idb__') await photoDB.del(r.id);
+  }
+  state.records = state.records.filter(r => r.synced !== true);
+  saveState();
+  renderHistory();
+  showToast(`✅ ${synced.length} registro(s) sincronizado(s) removido(s)`);
+}
+
+async function clearAll() {
   if (!confirm('⚠️ Apagar TODOS os registros?')) return;
+  await photoDB.clear(); // apaga todas as fotos do IndexedDB
   state.records = []; saveState(); renderHistory();
   showToast('🗑 Registros apagados');
 }
