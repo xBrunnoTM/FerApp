@@ -985,6 +985,17 @@ window.addEventListener('unhandledrejection', e => {
 DEBUG.info('Script carregado — aguardando init');
 
 // ═══════════════════════════════════════════════
+//  VARIÁVEIS CRÍTICAS (declaradas cedo para evitar TDZ)
+// ═══════════════════════════════════════════════
+// Estas variáveis são usadas por renderHistory / showToast / showBanner,
+// que são chamadas pelo init() lá embaixo. Com `let`/`const`, se forem
+// declaradas depois do init, ocorre "Cannot access X before initialization".
+// IDs dos registros sendo enviados ao Sheets agora (⏳ animado no card)
+const syncingIds = new Set();
+let toastT;   // handle do setTimeout do toast
+let bannerT;  // handle do setTimeout do banner
+
+// ═══════════════════════════════════════════════
 //  ESTADO
 // ═══════════════════════════════════════════════
 const DEFAULT_GROUPS    = ['Branco', 'Protium', 'Sulfadiazina de Prata'];
@@ -2902,8 +2913,8 @@ function removeDia(d) {
 //  GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════
 
-// IDs dos registros que estão sendo enviados agora (mostra ⏳ animado no card)
-const syncingIds = new Set();
+// (syncingIds está declarado no topo do script, antes do init, pra evitar TDZ
+//  quando init() chama renderHistory na segunda abertura do app)
 
 async function syncRecord(record) {
   if (!state.sheetsUrl) return;
@@ -3109,7 +3120,8 @@ async function clearAll() {
 // ═══════════════════════════════════════════════
 //  UI HELPERS
 // ═══════════════════════════════════════════════
-let toastT;
+// toastT e bannerT estão declarados no topo do script (antes de init)
+// para evitar TDZ quando init chama showBanner via setTimeout.
 function showToast(msg, duration = 2200) {
   const el = document.getElementById('toast');
   if (!el) return;
@@ -3126,7 +3138,6 @@ function showToast(msg, duration = 2200) {
     el.style.pointerEvents = 'none';
   }, duration);
 }
-let bannerT;
 function showBanner(msg, isError=false, duration=0) {
   const el=document.getElementById('syncBanner');
   el.textContent=msg; el.classList.toggle('error',isError); el.classList.add('show');
