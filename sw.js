@@ -1,9 +1,11 @@
-/* FerApp — Service Worker
-   Estratégia: Cache First para assets estáticos, Network First para o HTML.
-   Atualiza o cache automaticamente quando online.
+/* FerApp — Service Worker v3
+   Estratégia: Network First para o HTML (sempre busca a versão mais recente),
+   cache como fallback para quando estiver offline.
+   IMPORTANTE: só intercepta requests da mesma origem (arquivos do app).
+   Requests para APIs externas (Google Apps Script, OpenAI) passam direto.
 */
 
-const CACHE_NAME = 'ferapp-v2';
+const CACHE_NAME = 'ferapp-v3';
 const ASSETS = [
   './FerApp.html',
   './manifest.json',
@@ -16,7 +18,7 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
-  self.skipWaiting(); // ativa imediatamente sem esperar fechar as abas
+  self.skipWaiting();
 });
 
 // Remove caches antigos de versões anteriores
@@ -28,21 +30,24 @@ self.addEventListener('activate', e => {
       )
     )
   );
-  self.clients.claim(); // assume controle das abas abertas imediatamente
+  self.clients.claim();
 });
 
-// Intercepta requests: tenta rede primeiro, cai no cache se offline
+// Intercepta requests
 self.addEventListener('fetch', e => {
-  // Ignora requests que não sejam GET ou que sejam de APIs externas
+  // Só intercepta GET
   if (e.request.method !== 'GET') return;
+
+  // Só intercepta requests da MESMA ORIGEM (arquivos do app)
+  // APIs externas (Google Apps Script, OpenAI, etc.) passam direto sem interferência
   const url = new URL(e.request.url);
-  if (!url.protocol.startsWith('http')) return;
+  if (url.origin !== self.location.origin) return;
 
   e.respondWith(
     fetch(e.request)
       .then(response => {
-        // Se recebeu resposta válida, atualiza o cache
-        if (response && response.status === 200 && response.type === 'basic') {
+        // Recebeu resposta da rede — atualiza o cache
+        if (response && response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         }
