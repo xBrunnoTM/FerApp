@@ -1,13 +1,16 @@
-/* FerApp — Service Worker v9
+/* FerApp — Service Worker v10
    Estratégia: Network First para o HTML (sempre busca a versão mais recente),
    cache como fallback para quando estiver offline.
    IMPORTANTE: só intercepta requests da mesma origem (arquivos do app).
    Requests para APIs externas (Google Apps Script, OpenAI) passam direto.
    v7: fallback de navegação offline → garante abertura do app sem internet.
    v9: painel de diagnóstico DEBUG adicionado ao FerApp.html.
+   v10: BUG FIX crítico — syncingIds/toastT/bannerT movidos para o topo do
+        script para evitar TDZ quando init() chama renderHistory com registros
+        carregados (causa do histórico vazio na segunda abertura).
 */
 
-const CACHE_NAME = 'ferapp-v9';
+const CACHE_NAME = 'ferapp-v10';
 const ASSETS = [
   './FerApp.html',
   './manifest.json',
