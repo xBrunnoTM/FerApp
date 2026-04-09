@@ -862,7 +862,128 @@
 <div id="syncBanner"></div>
 <div id="toast"></div>
 
+<!-- ═══════════════════════════════════════════════
+     PAINEL DE DIAGNÓSTICO (DEBUG)
+     Botão flutuante no canto inferior direito —
+     abre um painel que mostra os logs de cada passo
+     crítico do app. Serve pra diagnosticar travas,
+     telas pretas, histórico vazio etc.
+     ═══════════════════════════════════════════════ -->
+<style>
+  #debugBtn {
+    position: fixed; right: 12px; bottom: 82px;
+    width: 42px; height: 42px; border-radius: 50%;
+    border: none; background: #1f2937; color: #fff;
+    font-size: 18px; z-index: 99998; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    opacity: 0.75;
+  }
+  #debugBtn:active { opacity: 1; }
+  #debugPanel {
+    position: fixed; inset: 0; z-index: 99999;
+    background: rgba(0,0,0,.85); color: #e5e7eb;
+    font-family: ui-monospace, monospace; font-size: 11px;
+    padding: 12px; overflow: auto;
+    display: none; flex-direction: column;
+  }
+  #debugPanel.open { display: flex; }
+  #debugPanel .dbg-header {
+    display: flex; gap: 8px; align-items: center;
+    padding-bottom: 8px; border-bottom: 1px solid #374151;
+    margin-bottom: 8px;
+  }
+  #debugPanel .dbg-header strong { flex: 1; font-size: 14px; }
+  #debugPanel .dbg-header button {
+    padding: 6px 10px; border-radius: 6px; border: none;
+    background: #374151; color: #fff; font-size: 12px;
+    cursor: pointer;
+  }
+  #debugLog { flex: 1; white-space: pre-wrap; word-break: break-word; }
+  #debugLog .l-info  { color: #86efac; }
+  #debugLog .l-warn  { color: #fde68a; }
+  #debugLog .l-error { color: #fca5a5; }
+  #debugLog .l-time  { color: #9ca3af; }
+</style>
+<button id="debugBtn" onclick="DEBUG.toggle()" title="Diagnóstico">🐛</button>
+<div id="debugPanel">
+  <div class="dbg-header">
+    <strong>🐛 Diagnóstico</strong>
+    <button onclick="DEBUG.copy()">Copiar</button>
+    <button onclick="DEBUG.clear()">Limpar</button>
+    <button onclick="DEBUG.toggle()">Fechar</button>
+  </div>
+  <div id="debugLog"></div>
+</div>
+
 <script>
+// ═══════════════════════════════════════════════
+//  DEBUG — painel de diagnóstico visível
+// ═══════════════════════════════════════════════
+// Guarda logs de cada passo crítico e expõe num painel flutuante.
+// Uso: DEBUG.info('msg'), DEBUG.warn('msg'), DEBUG.error('msg').
+// Mantém no máximo 200 entradas para não explodir memória.
+const DEBUG = (() => {
+  const MAX = 200;
+  const logs = [];
+  function stamp() {
+    const d = new Date();
+    return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0');
+  }
+  function push(level, msg) {
+    const entry = { t: stamp(), level, msg: String(msg) };
+    logs.push(entry);
+    if (logs.length > MAX) logs.shift();
+    // Espelha no console do navegador também
+    const fn = level === 'error' ? 'error' : level === 'warn' ? 'warn' : 'log';
+    try { console[fn]('[DEBUG]', entry.t, msg); } catch(_) {}
+    render();
+  }
+  function render() {
+    const el = document.getElementById('debugLog');
+    if (!el) return;
+    el.innerHTML = logs.map(e =>
+      `<span class="l-time">[${e.t}]</span> <span class="l-${e.level}">${
+        e.msg.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+      }</span>`
+    ).join('\n');
+    el.scrollTop = el.scrollHeight;
+  }
+  return {
+    info:  m => push('info',  m),
+    warn:  m => push('warn',  m),
+    error: m => push('error', m),
+    toggle() {
+      const p = document.getElementById('debugPanel');
+      if (p) { p.classList.toggle('open'); render(); }
+    },
+    clear() { logs.length = 0; render(); },
+    copy() {
+      const text = logs.map(e => `[${e.t}] [${e.level}] ${e.msg}`).join('\n');
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(
+          () => alert('Logs copiados!'),
+          () => alert('Falha ao copiar'));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); alert('Logs copiados!'); }
+        catch(_) { alert('Falha ao copiar'); }
+        document.body.removeChild(ta);
+      }
+    }
+  };
+})();
+
+// Captura erros globais — se algo quebrar, aparece no painel
+window.addEventListener('error', e => {
+  DEBUG.error(`JS error: ${e.message} @ ${e.filename}:${e.lineno}`);
+});
+window.addEventListener('unhandledrejection', e => {
+  DEBUG.error(`Promise rejeitada: ${e.reason && e.reason.message || e.reason}`);
+});
+
+DEBUG.info('Script carregado — aguardando init');
+
 // ═══════════════════════════════════════════════
 //  ESTADO
 // ═══════════════════════════════════════════════
@@ -901,6 +1022,7 @@ const photoDB = (() => {
     // Se já tem uma abertura em andamento, aguarda ela terminar
     if (_opening) return _opening;
 
+    try { DEBUG.info('photoDB: abrindo IndexedDB...'); } catch(_) {}
     _opening = new Promise((resolve, reject) => {
       const req = indexedDB.open(DB_NAME, VER);
       req.onupgradeneeded = e => {
@@ -911,23 +1033,31 @@ const photoDB = (() => {
       req.onsuccess = e => {
         _db = e.target.result;
         _opening = null;
+        try { DEBUG.info('photoDB: aberto OK'); } catch(_) {}
 
         // Quando o navegador precisar fechar a conexão (outra aba atualizando a DB,
         // pressão de memória, app voltando do background), reseta o handle pra que
         // a próxima operação reabra uma conexão fresca.
         _db.onversionchange = () => {
           console.warn('photoDB: versionchange — fechando conexão para reabrir limpa');
+          try { DEBUG.warn('photoDB: versionchange'); } catch(_) {}
           _db.close(); _db = null;
         };
         _db.onclose = () => {
           console.warn('photoDB: conexão fechada inesperadamente — será reaberta na próxima operação');
+          try { DEBUG.warn('photoDB: onclose'); } catch(_) {}
           _db = null;
         };
 
         resolve(_db);
       };
-      req.onerror = () => { _opening = null; reject(req.error); };
+      req.onerror = () => {
+        _opening = null;
+        try { DEBUG.error('photoDB: erro abertura ' + (req.error && req.error.message)); } catch(_) {}
+        reject(req.error);
+      };
       req.onblocked = () => {
+        try { DEBUG.warn('photoDB: onblocked'); } catch(_) {}
         // Outra aba está impedindo a abertura; força fechar a própria conexão se existir
         if (_db) { _db.close(); _db = null; }
       };
@@ -991,10 +1121,13 @@ const photoDB = (() => {
 //  INIT
 // ═══════════════════════════════════════════════
 (function init() {
+  DEBUG.info('init() iniciado');
   // Solicita armazenamento persistente (PWA — evita que browser limpe os dados)
   if (navigator.storage && navigator.storage.persist)
-    navigator.storage.persist().then(ok =>
-      console.log('FerApp: armazenamento persistente =', ok));
+    navigator.storage.persist().then(ok => {
+      console.log('FerApp: armazenamento persistente =', ok);
+      DEBUG.info('storage.persist = ' + ok);
+    });
 
   // Registra Service Worker (offline + cache)
   if ('serviceWorker' in navigator) {
@@ -1009,9 +1142,11 @@ const photoDB = (() => {
   }
 
   const saved = localStorage.getItem('ferapp_v2');
+  DEBUG.info('localStorage ferapp_v2: ' + (saved ? (saved.length/1024).toFixed(1)+' KB' : 'VAZIO'));
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
+      DEBUG.info('JSON parseado. records=' + (Array.isArray(parsed.records) ? parsed.records.length : 'NÃO-ARRAY'));
       // Garante que arrays essenciais sejam sempre arrays — nunca undefined
       if (!Array.isArray(parsed.records)) parsed.records = [];
       if (!Array.isArray(parsed.groups))  parsed.groups  = state.groups;
@@ -1019,6 +1154,7 @@ const photoDB = (() => {
       if (!Array.isArray(parsed.animals)) parsed.animals = state.animals;
       if (!Array.isArray(parsed.fotoDias))parsed.fotoDias= state.fotoDias;
       Object.assign(state, parsed);
+      DEBUG.info('state restaurado. records=' + state.records.length + ' groups=' + state.groups.length);
       console.log('FerApp: estado restaurado —', state.records.length, 'registros,',
                   (saved.length/1024).toFixed(1), 'KB');
       // Banner visível de diagnóstico — só aparece se houver registros
@@ -1028,10 +1164,12 @@ const photoDB = (() => {
         ), 400);
       }
     } catch(e) {
+      DEBUG.error('JSON.parse falhou: ' + e.message);
       console.error('FerApp: ERRO ao restaurar estado:', e);
       showBanner('⚠ Erro ao carregar dados salvos — use Importar Backup', true, 8000);
     }
   } else {
+    DEBUG.warn('Nenhum estado salvo (primeiro uso OU dados apagados)');
     console.log('FerApp: primeiro uso, nenhum estado salvo.');
   }
   // Reset ephemeral (não persistem entre sessões)
@@ -1057,10 +1195,15 @@ const photoDB = (() => {
   renderFilterBar();
   renderHistory();
   updateDrivePath();
+  DEBUG.info('init() renders iniciais concluídos');
 
   // Safety-net: re-render do histórico depois que a DOM estabilizar — se por
   // algum motivo o primeiro render não pegou, esse garante a exibição.
-  setTimeout(() => { renderFilterBar(); renderHistory(); }, 300);
+  setTimeout(() => {
+    DEBUG.info('Safety-net: re-render história (300ms)');
+    renderFilterBar();
+    renderHistory();
+  }, 300);
 
   document.getElementById('sheetsUrl').addEventListener('change', function() {
     state.sheetsUrl = this.value.trim();
@@ -1245,10 +1388,12 @@ function compressPhoto(dataUrl, maxPx = 1800, quality = 0.92) {
 // ── Handler da mudança do input de foto ──────────────────────────────────
 // Definido como função nomeada para ser reanexado em cada input novo.
 async function onPhotoInputChange(e) {
+  DEBUG.info('onPhotoInputChange DISPAROU');
   const file = e.target.files && e.target.files[0];
   // Importante: limpa o valor imediatamente para permitir escolher a mesma foto de novo
   try { e.target.value = ''; } catch(_) {}
-  if (!file) return;
+  if (!file) { DEBUG.warn('onPhotoInputChange: sem arquivo'); return; }
+  DEBUG.info(`onPhotoInputChange: file=${file.name || '?'} size=${(file.size/1024).toFixed(0)}KB type=${file.type}`);
   try {
     const dataUrl = await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1256,7 +1401,9 @@ async function onPhotoInputChange(e) {
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+    DEBUG.info(`FileReader OK: dataUrl=${(dataUrl.length/1024).toFixed(0)}KB`);
     const compressed = await compressPhoto(dataUrl);
+    DEBUG.info(`compressPhoto OK: comprimida=${(compressed.length/1024).toFixed(0)}KB`);
     state.currentPhoto   = compressed;
     state.analysisResult = null;
     state.aiResult       = null;
@@ -1283,7 +1430,9 @@ document.getElementById('photoInput').addEventListener('change', onPhotoInputCha
 // sempre dispara, mesmo se o usuário tirar a mesma foto várias vezes seguidas
 // ou reabrir o app e tirar a primeira foto.
 function openCameraInput() {
+  DEBUG.info('openCameraInput: recriando <input> e clicando');
   const old = document.getElementById('photoInput');
+  if (!old) { DEBUG.error('openCameraInput: #photoInput não encontrado'); return; }
   const fresh = document.createElement('input');
   fresh.type    = 'file';
   fresh.id      = 'photoInput';
@@ -1505,7 +1654,12 @@ function applyCanvasZoom() {
 
 // ── Abertura do modal ─────────────────────────
 function openAnalysisModal() {
-  if (!state.currentPhoto) return;
+  DEBUG.info('openAnalysisModal: chamado');
+  if (!state.currentPhoto) {
+    DEBUG.warn('openAnalysisModal: state.currentPhoto VAZIO — abortando');
+    return;
+  }
+  DEBUG.info(`openAnalysisModal: currentPhoto ${(state.currentPhoto.length/1024).toFixed(0)}KB`);
   document.getElementById('analysisModal').classList.add('open');
   document.getElementById('modalResult').classList.remove('show');
   window._areaResult      = null;
@@ -1523,11 +1677,16 @@ function openAnalysisModal() {
 
   const img = new Image();
   img.onload = function() {
+    DEBUG.info(`img.onload: natural=${img.naturalWidth}x${img.naturalHeight}`);
     // Aguarda 1 frame para garantir que o modal está renderizado e
     // clientWidth/clientHeight retornam valores reais (não zero)
     requestAnimationFrame(() => {
       const canvas     = document.getElementById('analysisCanvas');
       const scrollWrap = document.getElementById('canvasWrap');
+      if (!canvas)     { DEBUG.error('rAF: #analysisCanvas não encontrado'); return; }
+      if (!scrollWrap) { DEBUG.error('rAF: #canvasWrap não encontrado'); return; }
+
+      DEBUG.info(`rAF: wrap clientWH=${scrollWrap.clientWidth}x${scrollWrap.clientHeight} winWH=${window.innerWidth}x${window.innerHeight}`);
 
       // Fallback para window.innerWidth se o layout ainda não calculou
       const maxW = scrollWrap.clientWidth  || window.innerWidth  * 0.95;
@@ -1537,6 +1696,7 @@ function openAnalysisModal() {
       const scale   = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
       canvas.width  = Math.max(1, Math.floor(img.naturalWidth  * scale));
       canvas.height = Math.max(1, Math.floor(img.naturalHeight * scale));
+      DEBUG.info(`canvas dim=${canvas.width}x${canvas.height} scale=${scale.toFixed(3)}`);
 
       // canvasFitScale = 1: canvas CSS e pixels são iguais, zoom é 1:1
       canvasFitScale = 1.0;
@@ -1546,12 +1706,22 @@ function openAnalysisModal() {
       analysisCtx.imageSmoothingEnabled  = true;
       analysisCtx.imageSmoothingQuality  = 'high';
       analysisCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      originalImageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
+      DEBUG.info('drawImage OK');
+      try {
+        originalImageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
+        DEBUG.info(`getImageData OK: ${originalImageData.data.length} bytes`);
+      } catch (e) {
+        DEBUG.error('getImageData FALHOU: ' + e.message);
+      }
       applyCanvasZoom();
 
       if (!drawingListenersAdded) { initDrawingListeners(); drawingListenersAdded = true; }
       setMode('dual');
+      DEBUG.info('openAnalysisModal: pronto');
     });
+  };
+  img.onerror = function() {
+    DEBUG.error('img.onerror: falha ao carregar state.currentPhoto');
   };
   img.src = state.currentPhoto;
 }
@@ -2368,9 +2538,12 @@ function resetForm() {
 // ═══════════════════════════════════════════════
 function renderHistory() {
   const list = document.getElementById('historyList');
+  if (!list) { DEBUG.error('renderHistory: #historyList NÃO encontrado no DOM!'); return; }
   let filtered = state.records;
+  DEBUG.info(`renderHistory: state.records=${state.records.length} filtro=${state.filterGroup}`);
   if (state.filterGroup !== 'all')
     filtered = filtered.filter(r => r.group === state.filterGroup);
+  DEBUG.info(`renderHistory: filtered=${filtered.length}`);
 
   if (filtered.length === 0) {
     list.innerHTML = `<div class="history-empty">
@@ -2404,11 +2577,12 @@ function renderHistory() {
       </div>
     </div>`;
   }).join('');
+  DEBUG.info(`renderHistory: ${filtered.length} cards renderizados no DOM`);
 
   // Carrega miniaturas do IndexedDB em segundo plano
   filtered.filter(r => r.photo === '__idb__').forEach(async r => {
     const data = await photoDB.get(r.id);
-    if (!data) return;
+    if (!data) { DEBUG.warn(`renderHistory: thumb IDB vazio id=${r.id}`); return; }
     const card = list.querySelector(`[data-record-id="${r.id}"] .record-thumb`);
     if (card) card.innerHTML = `<img src="${data}" loading="lazy">`;
   });
@@ -2857,6 +3031,7 @@ window.addEventListener('online', syncAllPending);
 // Salva estado quando app vai para segundo plano (minimizar, trocar app, bloquear tela)
 // Crítico no mobile: o browser pode descarregar a página quando minimizada
 document.addEventListener('visibilitychange', () => {
+  DEBUG.info('visibilitychange: ' + document.visibilityState);
   if (document.visibilityState === 'hidden') {
     saveState();
   } else {
