@@ -949,11 +949,19 @@ const photoDB = (() => {
 
   const saved = localStorage.getItem('ferapp_v2');
   if (saved) {
-    try { Object.assign(state, JSON.parse(saved)); } catch(e) {}
+    try {
+      Object.assign(state, JSON.parse(saved));
+      console.log('FerApp: estado restaurado —', state.records.length, 'registros');
+    } catch(e) {
+      console.error('FerApp: erro ao restaurar estado:', e);
+    }
+  } else {
+    console.log('FerApp: primeiro uso, nenhum estado salvo.');
   }
-  // Reset ephemeral
+  // Reset ephemeral (não persistem entre sessões)
   state.currentPhoto   = null;
   state.analysisResult = null;
+  state.aiResult       = null;
 
   document.getElementById('recordDate').value = todayStr();
   document.getElementById('sheetsUrl').value  = state.sheetsUrl  || '';
@@ -981,6 +989,10 @@ const photoDB = (() => {
     saveState();
     updateDrivePath();
   });
+  document.getElementById('openaiKey').addEventListener('change', function() {
+    state.openaiKey = this.value.trim();
+    saveState();
+  });
   document.getElementById('lengthInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') onLengthChange();
   });
@@ -990,18 +1002,21 @@ function saveState() {
   const toSave = { records: state.records, groups: state.groups,
                    dias: state.dias, animals: state.animals,
                    fotoDias: state.fotoDias, sheetsUrl: state.sheetsUrl,
-                   pastaRaiz: state.pastaRaiz, openaiKey: state.openaiKey };
+                   pastaRaiz: state.pastaRaiz, openaiKey: state.openaiKey,
+                   filterGroup: state.filterGroup };
   try {
-    localStorage.setItem('ferapp_v2', JSON.stringify(toSave));
+    const json = JSON.stringify(toSave);
+    localStorage.setItem('ferapp_v2', json);
   } catch (e) {
     // QuotaExceededError — tenta salvar sem as fotos dos registros
+    console.warn('FerApp: erro ao salvar estado, tentando sem fotos...', e.message);
     try {
       const semFotos = { ...toSave,
-        records: toSave.records.map(r => ({ ...r, photo: null })) };
+        records: toSave.records.map(r => ({ ...r, photo: r.photo === '__idb__' ? '__idb__' : null })) };
       localStorage.setItem('ferapp_v2', JSON.stringify(semFotos));
-      console.warn('FerApp: fotos removidas do localStorage por limite de espaço.');
     } catch (e2) {
       console.error('FerApp: não foi possível salvar o estado local.', e2);
+      showToast('⚠ Erro ao salvar dados locais');
     }
   }
 }
@@ -1176,7 +1191,11 @@ function photoAreaClick(e) {
   if (state.currentPhoto && e.target.id === 'photoPreview') {
     openZoom();
   } else if (e.target.id !== 'photoPreview') {
-    document.getElementById('photoInput').click();
+    // Limpa o valor antes de abrir — garante que 'change' dispara mesmo
+    // se o usuário tirar outra foto sem salvar a anterior
+    const inp = document.getElementById('photoInput');
+    inp.value = '';
+    inp.click();
   }
 }
 
@@ -2644,11 +2663,27 @@ async function syncAllPending() {
 async function testSheets() {
   const url = document.getElementById('sheetsUrl').value.trim();
   if (!url) { showToast('Cole a URL do Apps Script primeiro'); return; }
-  showToast('Testando conexão...');
+  showToast('⏳ Testando conexão...');
   try {
-    const res = await fetch(url + '?test=1');
-    showToast(res.ok ? '✔ Conexão OK!' : '⚠ Erro HTTP ' + res.status);
-  } catch(e) { showToast('⚠ Não foi possível conectar'); }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const res = await fetch(url + '?test=1', {
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      showToast('✔ Conexão OK!');
+    } else {
+      showToast('⚠ Erro HTTP ' + res.status);
+    }
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      showToast('⚠ Tempo esgotado — verifique a URL');
+    } else {
+      showToast('⚠ Não foi possível conectar: ' + e.message);
+    }
+  }
 }
 
 window.addEventListener('online', syncAllPending);
