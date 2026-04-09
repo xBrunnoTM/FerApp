@@ -1,11 +1,12 @@
-/* FerApp — Service Worker v5
+/* FerApp — Service Worker v7
    Estratégia: Network First para o HTML (sempre busca a versão mais recente),
    cache como fallback para quando estiver offline.
    IMPORTANTE: só intercepta requests da mesma origem (arquivos do app).
    Requests para APIs externas (Google Apps Script, OpenAI) passam direto.
+   v7: fallback de navegação offline → garante abertura do app sem internet.
 */
 
-const CACHE_NAME = 'ferapp-v5';
+const CACHE_NAME = 'ferapp-v8';
 const ASSETS = [
   './FerApp.html',
   './manifest.json',
@@ -55,7 +56,11 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => {
         // Sem internet — serve do cache
-        return caches.match(e.request);
+        return caches.match(e.request).then(cached => {
+          if (cached) return cached;
+          // Fallback: qualquer navegação sem cache volta para o app principal
+          if (e.request.mode === 'navigate') return caches.match('./FerApp.html');
+        });
       })
   );
 });
