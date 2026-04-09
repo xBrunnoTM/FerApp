@@ -402,18 +402,30 @@
     .rsheet-sync.fail { background: var(--amber-100); color: #92400E; }
     .rsheet-sync .sync-icon { font-size: 22px; }
     .rsheet-sync .sync-msg  { flex: 1; }
-    /* Botões */
-    .rsheet-actions { display: flex; gap: 10px; padding: 14px 20px 0; }
+    /* Botões do painel de detalhes — todos com mesmo tamanho e visual consistente */
+    .rsheet-actions {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px; padding: 14px 20px 0;
+    }
+    .rsheet-actions button {
+      padding: 13px 8px; border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      gap: 4px; line-height: 1.2; min-height: 52px;
+      white-space: normal; text-align: center;
+    }
     .btn-resync {
-      flex: 2; padding: 13px; border: none; border-radius: var(--radius-sm);
+      border: none;
       background: var(--green-700); color: var(--white);
-      font-size: 15px; font-weight: 700; cursor: pointer;
     }
     .btn-resync:disabled { opacity: .55; }
+    .btn-dl-record {
+      border: 1.5px solid var(--blue-600);
+      background: var(--blue-100); color: var(--blue-600);
+    }
     .btn-del-record {
-      flex: 1; padding: 13px; border: 1.5px solid var(--red-500);
-      border-radius: var(--radius-sm); background: transparent;
-      color: var(--red-500); font-size: 15px; font-weight: 700; cursor: pointer;
+      border: 1.5px solid var(--red-500);
+      background: transparent; color: var(--red-500);
     }
 
     /* ── Sync / Toast ── */
@@ -834,9 +846,9 @@
 
     <!-- Ações -->
     <div class="rsheet-actions">
-      <button class="btn-resync"     id="btnResync"     onclick="resyncCurrentRecord()">🔄 Reenviar para o Drive</button>
-      <button class="btn-download"   id="btnDownloadRec" onclick="downloadRecordPhoto()">⬇️ Baixar Foto</button>
-      <button class="btn-del-record" id="btnDelRecord"  onclick="deleteCurrentRecord()">🗑 Apagar</button>
+      <button class="btn-resync"    id="btnResync"     onclick="resyncCurrentRecord()">🔄 Reenviar</button>
+      <button class="btn-dl-record" id="btnDownloadRec" onclick="downloadRecordPhoto()">⬇️ Baixar Foto</button>
+      <button class="btn-del-record" id="btnDelRecord" onclick="deleteCurrentRecord()">🗑 Apagar</button>
     </div>
   </div>
 </div>
@@ -957,12 +969,24 @@ const photoDB = (() => {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
+      // Garante que arrays essenciais sejam sempre arrays — nunca undefined
+      if (!Array.isArray(parsed.records)) parsed.records = [];
+      if (!Array.isArray(parsed.groups))  parsed.groups  = state.groups;
+      if (!Array.isArray(parsed.dias))    parsed.dias    = state.dias;
+      if (!Array.isArray(parsed.animals)) parsed.animals = state.animals;
+      if (!Array.isArray(parsed.fotoDias))parsed.fotoDias= state.fotoDias;
       Object.assign(state, parsed);
       console.log('FerApp: estado restaurado —', state.records.length, 'registros,',
                   (saved.length/1024).toFixed(1), 'KB');
+      // Banner visível de diagnóstico — só aparece se houver registros
+      if (state.records.length > 0) {
+        setTimeout(() => showBanner(
+          `✔ ${state.records.length} registro(s) carregado(s) do celular`, false, 3500
+        ), 400);
+      }
     } catch(e) {
       console.error('FerApp: ERRO ao restaurar estado:', e);
-      showToast('⚠ Erro ao carregar dados salvos');
+      showBanner('⚠ Erro ao carregar dados salvos — use Importar Backup', true, 8000);
     }
   } else {
     console.log('FerApp: primeiro uso, nenhum estado salvo.');
@@ -990,6 +1014,10 @@ const photoDB = (() => {
   renderFilterBar();
   renderHistory();
   updateDrivePath();
+
+  // Safety-net: re-render do histórico depois que a DOM estabilizar — se por
+  // algum motivo o primeiro render não pegou, esse garante a exibição.
+  setTimeout(() => { renderFilterBar(); renderHistory(); }, 300);
 
   document.getElementById('sheetsUrl').addEventListener('change', function() {
     state.sheetsUrl = this.value.trim();
@@ -1171,12 +1199,21 @@ function compressPhoto(dataUrl, maxPx = 1800, quality = 0.92) {
   });
 }
 
-document.getElementById('photoInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
+// ── Handler da mudança do input de foto ──────────────────────────────────
+// Definido como função nomeada para ser reanexado em cada input novo.
+async function onPhotoInputChange(e) {
+  const file = e.target.files && e.target.files[0];
+  // Importante: limpa o valor imediatamente para permitir escolher a mesma foto de novo
+  try { e.target.value = ''; } catch(_) {}
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async ev => {
-    const compressed = await compressPhoto(ev.target.result);
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = ev => resolve(ev.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const compressed = await compressPhoto(dataUrl);
     state.currentPhoto   = compressed;
     state.analysisResult = null;
     state.aiResult       = null;
@@ -1190,9 +1227,30 @@ document.getElementById('photoInput').addEventListener('change', function(e) {
     document.getElementById('btnRetake').style.display    = 'flex';
     document.getElementById('resultBox').classList.remove('show');
     document.getElementById('aiResultBox').classList.remove('show');
-  };
-  reader.readAsDataURL(file);
-});
+  } catch (err) {
+    console.error('FerApp: erro ao processar foto:', err);
+    showToast('⚠ Erro ao processar foto');
+  }
+}
+document.getElementById('photoInput').addEventListener('change', onPhotoInputChange);
+
+// ── Abre a câmera de forma robusta ────────────────────────────────────────
+// Em vez de só setar .value='' (que alguns celulares ignoram), RECRIA o
+// elemento <input> antes de cada click. Isso garante que o evento 'change'
+// sempre dispara, mesmo se o usuário tirar a mesma foto várias vezes seguidas
+// ou reabrir o app e tirar a primeira foto.
+function openCameraInput() {
+  const old = document.getElementById('photoInput');
+  const fresh = document.createElement('input');
+  fresh.type    = 'file';
+  fresh.id      = 'photoInput';
+  fresh.accept  = 'image/*';
+  fresh.capture = 'environment';
+  fresh.style.display = 'none';
+  fresh.addEventListener('change', onPhotoInputChange);
+  old.parentNode.replaceChild(fresh, old);
+  fresh.click();
+}
 
 // Download da foto atual com o nome de arquivo gerado pelo formulário
 function downloadCurrentPhoto() {
@@ -1204,12 +1262,9 @@ function downloadCurrentPhoto() {
   a.click();
 }
 
-// Tirar outra foto — descarta a atual e reabre a câmera imediatamente
+// Tirar outra foto — reabre a câmera com input novinho em folha
 function retakePhoto() {
-  // Limpa o input para garantir que 'change' dispara ao escolher nova foto
-  const inp = document.getElementById('photoInput');
-  inp.value = '';
-  inp.click();
+  openCameraInput();
 }
 
 // Toque na foto abre zoom; toque na área vazia abre câmera
@@ -1217,11 +1272,7 @@ function photoAreaClick(e) {
   if (state.currentPhoto && e.target.id === 'photoPreview') {
     openZoom();
   } else if (e.target.id !== 'photoPreview') {
-    // Limpa o valor antes de abrir — garante que 'change' dispara mesmo
-    // se o usuário tirar outra foto sem salvar a anterior
-    const inp = document.getElementById('photoInput');
-    inp.value = '';
-    inp.click();
+    openCameraInput();
   }
 }
 
@@ -1359,6 +1410,8 @@ let isDrawing    = false;
 let eraserActive = false;    // borracha ativa no modo auto
 let drawingListenersAdded = false;
 let canvasZoom   = 1.0;      // zoom atual do canvas (1 a 4)
+let canvasFitScale = 1.0;    // escala para caber na tela (pixels reais ÷ pixels CSS)
+let strokeScale    = 1;      // multiplicador de linhas/círculos — compensa canvas grande
 let pinchStartDist= null;    // distância inicial do gesto pinch
 let pinchStartZoom= 1.0;     // zoom no início do pinch
 
@@ -1397,12 +1450,14 @@ function applyCanvasZoom() {
   const canvas = document.getElementById('analysisCanvas');
   const wrap   = document.getElementById('canvasZoomWrap');
   if (!canvas.width) return;
-  const w = canvas.width  * canvasZoom;
-  const h = canvas.height * canvasZoom;
-  canvas.style.width  = w + 'px';
-  canvas.style.height = h + 'px';
-  wrap.style.width    = w + 'px';
-  wrap.style.height   = h + 'px';
+  // O canvas está em resolução nativa (ex: 1800x1800). Escala CSS = fit * zoom.
+  // Em zoom=1 cabe na tela; em zoom=2+ mostra pixels nítidos da imagem original.
+  const displayW = canvas.width  * canvasFitScale * canvasZoom;
+  const displayH = canvas.height * canvasFitScale * canvasZoom;
+  canvas.style.width  = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  wrap.style.width    = displayW + 'px';
+  wrap.style.height   = displayH + 'px';
   document.getElementById('zoomLabel').textContent =
     canvasZoom === Math.floor(canvasZoom) ? canvasZoom + '×' : canvasZoom.toFixed(1) + '×';
 }
@@ -1431,9 +1486,13 @@ function openAnalysisModal() {
     const scrollWrap = document.getElementById('canvasWrap');
     const maxW   = scrollWrap.clientWidth;
     const maxH   = scrollWrap.clientHeight;
-    const scale  = Math.min(maxW / img.width, maxH / img.height, 1);
-    canvas.width  = Math.floor(img.width  * scale);
-    canvas.height = Math.floor(img.height * scale);
+    // Canvas em RESOLUÇÃO NATIVA da imagem (qualidade total para zoom nítido)
+    canvas.width  = img.naturalWidth  || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    // Calcula a escala CSS para caber na tela inicial (zoom=1)
+    canvasFitScale = Math.min(maxW / canvas.width, maxH / canvas.height, 1);
+    // Compensa espessuras de linhas/pontos para não ficarem invisíveis em imagens grandes
+    strokeScale = canvasFitScale > 0 ? Math.max(1, 1 / canvasFitScale) : 1;
     analysisCtx = canvas.getContext('2d', { willReadFrequently: true });
     analysisCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
     originalImageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1628,15 +1687,15 @@ function initDrawingListeners() {
       // Posição do ponto focal no conteúdo atual (antes do zoom)
       const focalX = midX - rect.left + scrollWrap.scrollLeft;
       const focalY = midY - rect.top  + scrollWrap.scrollTop;
-      const oldW = canvas.width  * canvasZoom;
-      const oldH = canvas.height * canvasZoom;
+      const oldW = canvas.width  * canvasFitScale * canvasZoom;
+      const oldH = canvas.height * canvasFitScale * canvasZoom;
 
       canvasZoom = newZoom;
       applyCanvasZoom();
 
       // Reajusta scroll para manter o ponto focal sob os dedos
-      const newW = canvas.width  * canvasZoom;
-      const newH = canvas.height * canvasZoom;
+      const newW = canvas.width  * canvasFitScale * canvasZoom;
+      const newH = canvas.height * canvasFitScale * canvasZoom;
       scrollWrap.scrollLeft = (focalX / oldW) * newW - (midX - rect.left);
       scrollWrap.scrollTop  = (focalY / oldH) * newH - (midY - rect.top);
       return;
@@ -1672,7 +1731,7 @@ function redrawAllTraces() {
     for (let i = 1; i < refPoints.length; i++) analysisCtx.lineTo(refPoints[i].x, refPoints[i].y);
     analysisCtx.closePath();
     analysisCtx.strokeStyle = '#F59E0B';
-    analysisCtx.lineWidth   = 2.5;
+    analysisCtx.lineWidth   = 2.5 * strokeScale;
     analysisCtx.lineJoin    = 'round';
     analysisCtx.stroke();
   }
@@ -1686,7 +1745,7 @@ function redrawAllTraces() {
     analysisCtx.fillStyle   = 'rgba(239,68,68,0.32)';
     analysisCtx.fill();
     analysisCtx.strokeStyle = '#4ADE80';
-    analysisCtx.lineWidth   = 2.5;
+    analysisCtx.lineWidth   = 2.5 * strokeScale;
     analysisCtx.lineJoin    = 'round';
     analysisCtx.stroke();
   }
@@ -1776,7 +1835,7 @@ function redrawTrace(closed) {
 
   if (closed) { analysisCtx.fillStyle = 'rgba(239,68,68,0.35)'; analysisCtx.fill(); }
   analysisCtx.strokeStyle = '#4ADE80';
-  analysisCtx.lineWidth   = 2.5;
+  analysisCtx.lineWidth   = 2.5 * strokeScale;
   analysisCtx.lineJoin    = 'round';
   analysisCtx.lineCap     = 'round';
   analysisCtx.stroke();
@@ -1914,7 +1973,7 @@ function redrawAutoOverlay() {
   // Bounding box verde
   const b = result.bounds;
   analysisCtx.strokeStyle = '#4ADE80';
-  analysisCtx.lineWidth   = 2;
+  analysisCtx.lineWidth   = 2 * strokeScale;
   analysisCtx.strokeRect(b.minX, b.minY, b.maxX - b.minX, b.maxY - b.minY);
 }
 
@@ -1963,7 +2022,7 @@ function eraseAt(cx, cy) {
   analysisCtx.beginPath();
   analysisCtx.arc(cx, cy, r, 0, Math.PI * 2);
   analysisCtx.strokeStyle = 'rgba(255,255,255,0.8)';
-  analysisCtx.lineWidth   = 1.5;
+  analysisCtx.lineWidth   = 1.5 * strokeScale;
   analysisCtx.stroke();
 
   // Recalcula área em tempo real se comprimento já preenchido
@@ -2393,25 +2452,25 @@ function renderSheetSyncStatus(r) {
     el.className = 'rsheet-sync fail'; // amarelo
     el.innerHTML = `<span class="sync-icon" style="animation:syncpulse 1s infinite">⏳</span>
       <span class="sync-msg">Enviando para o Drive e Sheets...</span>`;
-    btnResync.textContent = '⏳ Enviando...';
+    btnResync.textContent = '⏳ Enviando';
     btnResync.disabled    = true;
   } else if (r.synced) {
     el.className = 'rsheet-sync ok';
     el.innerHTML = `<span class="sync-icon">☁️</span>
       <span class="sync-msg">Confirmado — salvo no Drive e Sheets</span>`;
-    btnResync.textContent = '🔄 Reenviar novamente';
+    btnResync.textContent = '🔄 Reenviar';
     btnResync.disabled    = !state.sheetsUrl;
   } else if (r.syncFailed) {
     el.className = 'rsheet-sync fail';
     el.innerHTML = `<span class="sync-icon">⚠️</span>
       <span class="sync-msg">Falha no envio — salvo só no celular</span>`;
-    btnResync.textContent = '☁️ Tentar novamente';
+    btnResync.textContent = '☁️ Tentar de novo';
     btnResync.disabled    = !state.sheetsUrl;
   } else {
     el.className = 'rsheet-sync fail';
     el.innerHTML = `<span class="sync-icon">🔄</span>
       <span class="sync-msg">Ainda não enviado — salvo só no celular</span>`;
-    btnResync.textContent = '☁️ Enviar para o Drive agora';
+    btnResync.textContent = '☁️ Enviar agora';
     btnResync.disabled    = !state.sheetsUrl;
   }
 }
