@@ -1,11 +1,11 @@
-/* FerApp — Service Worker v4
+/* FerApp — Service Worker v5
    Estratégia: Network First para o HTML (sempre busca a versão mais recente),
    cache como fallback para quando estiver offline.
    IMPORTANTE: só intercepta requests da mesma origem (arquivos do app).
    Requests para APIs externas (Google Apps Script, OpenAI) passam direto.
 */
 
-const CACHE_NAME = 'ferapp-v4';
+const CACHE_NAME = 'ferapp-v5';
 const ASSETS = [
   './FerApp.html',
   './manifest.json',
