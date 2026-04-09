@@ -891,55 +891,98 @@ let state = {
 //  INDEXEDDB — armazenamento de fotos (sem limite de tamanho)
 // ═══════════════════════════════════════════════
 const photoDB = (() => {
-  let _db = null;
+  let _db  = null;
+  let _opening = null; // promessa de abertura em andamento (evita aberturas paralelas)
   const DB_NAME = 'FerAppPhotos', STORE = 'photos', VER = 1;
 
   function open() {
+    // Se já tem conexão válida e aberta, reutiliza
     if (_db) return Promise.resolve(_db);
-    return new Promise((resolve, reject) => {
+    // Se já tem uma abertura em andamento, aguarda ela terminar
+    if (_opening) return _opening;
+
+    _opening = new Promise((resolve, reject) => {
       const req = indexedDB.open(DB_NAME, VER);
-      req.onupgradeneeded = e => e.target.result.createObjectStore(STORE, { keyPath: 'id' });
-      req.onsuccess  = e => { _db = e.target.result; resolve(_db); };
-      req.onerror    = ()  => reject(req.error);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE))
+          db.createObjectStore(STORE, { keyPath: 'id' });
+      };
+      req.onsuccess = e => {
+        _db = e.target.result;
+        _opening = null;
+
+        // Quando o navegador precisar fechar a conexão (outra aba atualizando a DB,
+        // pressão de memória, app voltando do background), reseta o handle pra que
+        // a próxima operação reabra uma conexão fresca.
+        _db.onversionchange = () => {
+          console.warn('photoDB: versionchange — fechando conexão para reabrir limpa');
+          _db.close(); _db = null;
+        };
+        _db.onclose = () => {
+          console.warn('photoDB: conexão fechada inesperadamente — será reaberta na próxima operação');
+          _db = null;
+        };
+
+        resolve(_db);
+      };
+      req.onerror = () => { _opening = null; reject(req.error); };
+      req.onblocked = () => {
+        // Outra aba está impedindo a abertura; força fechar a própria conexão se existir
+        if (_db) { _db.close(); _db = null; }
+      };
     });
+    return _opening;
+  }
+
+  // Executa uma operação com retry automático em caso de conexão stale
+  async function run(fn) {
+    try {
+      const db = await open();
+      return await fn(db);
+    } catch (e) {
+      // Se falhou por conexão fechada, reseta e tenta UMA vez mais
+      if (_db) { try { _db.close(); } catch(_) {} _db = null; }
+      console.warn('photoDB: erro, tentando reabrir conexão...', e);
+      try {
+        const db = await open();
+        return await fn(db);
+      } catch (e2) {
+        console.error('photoDB: falha definitiva:', e2);
+        return null;
+      }
+    }
   }
 
   return {
     async save(id, data) {
-      try { const db = await open();
-        await new Promise((res, rej) => {
-          const tx = db.transaction(STORE, 'readwrite');
-          tx.objectStore(STORE).put({ id, data });
-          tx.oncomplete = res; tx.onerror = () => rej(tx.error);
-        });
-      } catch(e) { console.warn('photoDB.save:', e); }
+      await run(db => new Promise((res, rej) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).put({ id, data });
+        tx.oncomplete = res;
+        tx.onerror = () => rej(tx.error);
+      }));
     },
     async get(id) {
-      try { const db = await open();
-        return await new Promise(res => {
-          const req = db.transaction(STORE,'readonly').objectStore(STORE).get(id);
-          req.onsuccess = () => res(req.result?.data || null);
-          req.onerror   = () => res(null);
-        });
-      } catch(e) { return null; }
+      return await run(db => new Promise(res => {
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(id);
+        req.onsuccess = () => res(req.result?.data || null);
+        req.onerror   = () => res(null);
+      })) ?? null;
     },
     async del(id) {
-      try { const db = await open();
-        await new Promise(res => {
-          const tx = db.transaction(STORE,'readwrite');
-          tx.objectStore(STORE).delete(id);
-          tx.oncomplete = res; tx.onerror = res;
-        });
-      } catch(e) {}
+      await run(db => new Promise(res => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).delete(id);
+        tx.oncomplete = res; tx.onerror = res;
+      }));
     },
     async clear() {
-      try { const db = await open();
-        await new Promise(res => {
-          const tx = db.transaction(STORE,'readwrite');
-          tx.objectStore(STORE).clear();
-          tx.oncomplete = res; tx.onerror = res;
-        });
-      } catch(e) {}
+      await run(db => new Promise(res => {
+        const tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).clear();
+        tx.oncomplete = res; tx.onerror = res;
+      }));
     }
   };
 })();
@@ -1450,14 +1493,12 @@ function applyCanvasZoom() {
   const canvas = document.getElementById('analysisCanvas');
   const wrap   = document.getElementById('canvasZoomWrap');
   if (!canvas.width) return;
-  // O canvas está em resolução nativa (ex: 1800x1800). Escala CSS = fit * zoom.
-  // Em zoom=1 cabe na tela; em zoom=2+ mostra pixels nítidos da imagem original.
-  const displayW = canvas.width  * canvasFitScale * canvasZoom;
-  const displayH = canvas.height * canvasFitScale * canvasZoom;
-  canvas.style.width  = displayW + 'px';
-  canvas.style.height = displayH + 'px';
-  wrap.style.width    = displayW + 'px';
-  wrap.style.height   = displayH + 'px';
+  const w = canvas.width  * canvasZoom;
+  const h = canvas.height * canvasZoom;
+  canvas.style.width  = w + 'px';
+  canvas.style.height = h + 'px';
+  wrap.style.width    = w + 'px';
+  wrap.style.height   = h + 'px';
   document.getElementById('zoomLabel').textContent =
     canvasZoom === Math.floor(canvasZoom) ? canvasZoom + '×' : canvasZoom.toFixed(1) + '×';
 }
@@ -1482,24 +1523,35 @@ function openAnalysisModal() {
 
   const img = new Image();
   img.onload = function() {
-    const canvas   = document.getElementById('analysisCanvas');
-    const scrollWrap = document.getElementById('canvasWrap');
-    const maxW   = scrollWrap.clientWidth;
-    const maxH   = scrollWrap.clientHeight;
-    // Canvas em RESOLUÇÃO NATIVA da imagem (qualidade total para zoom nítido)
-    canvas.width  = img.naturalWidth  || img.width;
-    canvas.height = img.naturalHeight || img.height;
-    // Calcula a escala CSS para caber na tela inicial (zoom=1)
-    canvasFitScale = Math.min(maxW / canvas.width, maxH / canvas.height, 1);
-    // Compensa espessuras de linhas/pontos para não ficarem invisíveis em imagens grandes
-    strokeScale = canvasFitScale > 0 ? Math.max(1, 1 / canvasFitScale) : 1;
-    analysisCtx = canvas.getContext('2d', { willReadFrequently: true });
-    analysisCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    originalImageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
-    applyCanvasZoom(); // aplica zoom=1 inicial (limpa estilos)
+    // Aguarda 1 frame para garantir que o modal está renderizado e
+    // clientWidth/clientHeight retornam valores reais (não zero)
+    requestAnimationFrame(() => {
+      const canvas     = document.getElementById('analysisCanvas');
+      const scrollWrap = document.getElementById('canvasWrap');
 
-    if (!drawingListenersAdded) { initDrawingListeners(); drawingListenersAdded = true; }
-    setMode('dual');
+      // Fallback para window.innerWidth se o layout ainda não calculou
+      const maxW = scrollWrap.clientWidth  || window.innerWidth  * 0.95;
+      const maxH = scrollWrap.clientHeight || window.innerHeight * 0.60;
+
+      // Canvas dimensionado para caber na tela — rápido e confiável no celular
+      const scale   = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight, 1);
+      canvas.width  = Math.max(1, Math.floor(img.naturalWidth  * scale));
+      canvas.height = Math.max(1, Math.floor(img.naturalHeight * scale));
+
+      // canvasFitScale = 1: canvas CSS e pixels são iguais, zoom é 1:1
+      canvasFitScale = 1.0;
+      strokeScale    = 1.0;
+
+      analysisCtx = canvas.getContext('2d', { willReadFrequently: true });
+      analysisCtx.imageSmoothingEnabled  = true;
+      analysisCtx.imageSmoothingQuality  = 'high';
+      analysisCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      originalImageData = analysisCtx.getImageData(0, 0, canvas.width, canvas.height);
+      applyCanvasZoom();
+
+      if (!drawingListenersAdded) { initDrawingListeners(); drawingListenersAdded = true; }
+      setMode('dual');
+    });
   };
   img.src = state.currentPhoto;
 }
@@ -1687,15 +1739,15 @@ function initDrawingListeners() {
       // Posição do ponto focal no conteúdo atual (antes do zoom)
       const focalX = midX - rect.left + scrollWrap.scrollLeft;
       const focalY = midY - rect.top  + scrollWrap.scrollTop;
-      const oldW = canvas.width  * canvasFitScale * canvasZoom;
-      const oldH = canvas.height * canvasFitScale * canvasZoom;
+      const oldW = canvas.width  * canvasZoom;
+      const oldH = canvas.height * canvasZoom;
 
       canvasZoom = newZoom;
       applyCanvasZoom();
 
       // Reajusta scroll para manter o ponto focal sob os dedos
-      const newW = canvas.width  * canvasFitScale * canvasZoom;
-      const newH = canvas.height * canvasFitScale * canvasZoom;
+      const newW = canvas.width  * canvasZoom;
+      const newH = canvas.height * canvasZoom;
       scrollWrap.scrollLeft = (focalX / oldW) * newW - (midX - rect.left);
       scrollWrap.scrollTop  = (focalY / oldH) * newH - (midY - rect.top);
       return;
@@ -2805,7 +2857,14 @@ window.addEventListener('online', syncAllPending);
 // Salva estado quando app vai para segundo plano (minimizar, trocar app, bloquear tela)
 // Crítico no mobile: o browser pode descarregar a página quando minimizada
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') saveState();
+  if (document.visibilityState === 'hidden') {
+    saveState();
+  } else {
+    // App voltou do background — re-render do histórico e recarga de miniaturas do IndexedDB
+    // O IndexedDB pode ter fechado a conexão enquanto o app estava em segundo plano;
+    // a próxima operação em photoDB reabrirá automaticamente (via run() com retry).
+    renderHistory();
+  }
 });
 window.addEventListener('pagehide', saveState);   // iOS Safari (beforeunload não funciona)
 
